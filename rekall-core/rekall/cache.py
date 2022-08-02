@@ -84,7 +84,7 @@ class Cache(object):
     def __init__(self, session):
         self.data = {}
         self.session = session
-        if session == None:
+        if session is None:
             raise RuntimeError("Session must be set")
 
     def Get(self, item, default=None):
@@ -112,9 +112,9 @@ class Cache(object):
 
             value = u"\n  ".join(str(v).splitlines())
             if len(value) > 100:
-                value = u"%s ..." % value[:100]
+                value = f"{value[:100]} ..."
 
-            result.append(u"  %s = %s" % (k, value))
+            result.append(f"  {k} = {value}")
 
         return u"{\n" + u"\n".join(sorted(result)) + u"\n}"
 
@@ -151,11 +151,7 @@ class TimedCache(Cache):
         if value is None:
             self.data.pop(item, None)
         else:
-            if volatile:
-                now = time.time()
-            else:
-                now = 2**63
-
+            now = time.time() if volatile else 2**63
             self.data[item] = (value, now)
 
     def __str__(self):
@@ -171,12 +167,12 @@ class TimedCache(Cache):
 
             value = u"\n  ".join(str(v).splitlines())
             if len(value) > 1000:
-                value = u"%s ..." % value[:1000]
+                value = f"{value[:1000]} ..."
             prefix = ""
             if timestamp == 2**63:
                 prefix = "(NV)"
 
-            result.append(u"  %s %s = %s" % (prefix, k, value))
+            result.append(f"  {prefix} {k} = {value}")
 
         return u"{\n" + u"\n".join(sorted(result)) + u"\n}"
 
@@ -220,8 +216,9 @@ class FileCache(Cache):
             # Cache dir may be specified relative to the home directory.
             if os.access(cache_dir, os.F_OK | os.R_OK | os.W_OK | os.X_OK):
                 self._io_manager = PicklingDirectoryIOManager(
-                    "%s/sessions" % cache_dir, session=self.session,
-                    mode="w")
+                    f"{cache_dir}/sessions", session=self.session, mode="w"
+                )
+
 
                 self.cache_dir = cache_dir
             else:
@@ -248,9 +245,7 @@ class FileCache(Cache):
                 item not in self.data and   # Item not already cached in memory.
                 item not in self.dirty):    # Item was not previously changed.
             try:
-                data = self.io_manager.GetData(
-                    "sessions/%s/%s" % (self.name, item),
-                    default=self)
+                data = self.io_manager.GetData(f"sessions/{self.name}/{item}", default=self)
                 if data is not self:
                     self.data[item] = data
             except Exception:
@@ -268,11 +263,11 @@ class FileCache(Cache):
 
         # Also delete the files backing this cache.
         if self._io_manager:
-            self._io_manager.Destroy("sessions/%s" % self.name)
+            self._io_manager.Destroy(f"sessions/{self.name}")
 
     @utils.safe_property
     def location(self):
-        return "%s/v1.0/sessions/%s" % (self._io_manager.location, self.name)
+        return f"{self._io_manager.location}/v1.0/sessions/{self.name}"
 
     def Flush(self):
         """Write out all dirty items at once."""
@@ -284,10 +279,8 @@ class FileCache(Cache):
             for key, item in six.iteritems(self.data):
                 if key in self.dirty or getattr(item, "dirty", False):
                     now = time.time()
-                    self.io_manager.StoreData(
-                        "sessions/%s/%s" % (self.name, key), item)
-                    self.session.logging.debug("Flushed %s in %s" % (
-                        key, (time.time() - now)))
+                    self.io_manager.StoreData(f"sessions/{self.name}/{key}", item)
+                    self.session.logging.debug(f"Flushed {key} in {time.time() - now}")
 
             self.io_manager.FlushInventory()
 
@@ -310,7 +303,7 @@ class FileCache(Cache):
 
     def __repr__(self):
         if self._io_manager:
-            return "<FileCache @ %s>" % self.location
+            return f"<FileCache @ {self.location}>"
         else:
             return "<FileCache (unbacked)>"
 
@@ -333,7 +326,7 @@ class SessionIndex(object):
 def GetCacheDir(session):
     """Returns the path of a usable cache directory."""
     cache_dir = session.GetParameter("cache_dir")
-    if cache_dir == None:
+    if cache_dir is None:
         return cache_dir
 
     cache_dir = os.path.expandvars(cache_dir)
@@ -351,7 +344,9 @@ def GetCacheDir(session):
             os.makedirs(cache_dir)
         except (IOError, OSError):
             raise io_manager.IOManagerError(
-                "Unable to create or access cache directory %s" % cache_dir)
+                f"Unable to create or access cache directory {cache_dir}"
+            )
+
 
     return cache_dir
 
@@ -360,7 +355,7 @@ def Factory(session, cache_type):
     """Instantiate the most appropriate cache for this session."""
     if cache_type == "memory":
         return Cache(session)
-    elif GetCacheDir(session) == None:
+    elif GetCacheDir(session) is None:
         session.logging.info("Cache directory is not specified or invalid. "
                              "Switching to memory cache.")
 
@@ -369,7 +364,4 @@ def Factory(session, cache_type):
     if cache_type == "timed":
         return TimedCache(session)
 
-    if cache_type == "file":
-        return FileCache(session)
-
-    return Cache(session)
+    return FileCache(session) if cache_type == "file" else Cache(session)

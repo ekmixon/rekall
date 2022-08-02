@@ -117,25 +117,24 @@ class CheckSyscall(common.LinuxPlugin):
 
             # This table does not exist in this profile dont bother looking for
             # its size.
-            if self.profile.get_constant(table_name) == None:
+            if self.profile.get_constant(table_name) is None:
                 continue
 
             func = self.profile.get_constant_object(
                 func_name, target="Function")
-            if func == None:
+            if func is None:
                 continue
 
             matcher = dynamic_profiles.DisassembleMatcher(
                 name="sys_call_table_size",
                 mode=func.mode, rules=rules, session=self.session)
 
-            result = matcher.MatchFunction(func)
-            if result:
+            if result := matcher.MatchFunction(func):
                 tables.add(table_name)
                 yield table_name, result["$value"] + 1
 
         # Fallback. Note this underestimates the size quite a bit.
-        if func == None:
+        if func is None:
             table_size = len([x for x in self.profile.constants
                               if x.startswith("__syscall_meta__")]) or 0x300
             yield "ia32_sys_call_table", table_size
@@ -146,7 +145,7 @@ class CheckSyscall(common.LinuxPlugin):
         This works by walking the system call table
         and verifies that each is a symbol in the kernel
         """
-        for table_name, table_size in  self.Find_sys_call_tables():
+        for table_name, table_size in self.Find_sys_call_tables():
             # The syscall table is simply an array of pointers to functions.
             table = self.profile.get_constant_object(
                 table_name,
@@ -160,7 +159,7 @@ class CheckSyscall(common.LinuxPlugin):
                     )
                 )
 
-            yield dict(divider="Table %s" % table_name)
+            yield dict(divider=f"Table {table_name}")
 
             resolver = self.session.address_resolver
             for i, entry in enumerate(table):

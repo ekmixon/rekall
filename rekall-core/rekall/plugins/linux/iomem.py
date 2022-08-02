@@ -55,12 +55,9 @@ class IOmem(common.LinuxPlugin):
         yield node, depth
 
         if node.child:
-            for x in self._GetResources(node.child.deref(), seen, depth+1):
-                yield x
-
+            yield from self._GetResources(node.child.deref(), seen, depth+1)
         for sibling in node.walk_list("sibling"):
-            for x in self._GetResources(sibling, seen, depth):
-                yield x
+            yield from self._GetResources(sibling, seen, depth)
 
 
     def collect(self):

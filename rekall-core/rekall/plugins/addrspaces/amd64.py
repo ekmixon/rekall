@@ -134,7 +134,7 @@ class AMD64PagedMemory(intel.IA32PagedMemoryPae):
         # Pages that hold PDEs and PTEs are 0x1000 bytes each.
         # Each PDE and PTE is eight bytes. Thus there are 0x1000 / 8 = 0x200
         # PDEs and PTEs we must test.
-        for pml4e_index in range(0, 0x200):
+        for pml4e_index in range(0x200):
             vaddr = pml4e_index << 39
             if vaddr > end:
                 return
@@ -150,7 +150,7 @@ class AMD64PagedMemory(intel.IA32PagedMemoryPae):
                 continue
 
             tmp1 = vaddr
-            for pdpte_index in range(0, 0x200):
+            for pdpte_index in range(0x200):
                 vaddr = tmp1 + (pdpte_index << 30)
                 if vaddr > end:
                     return
@@ -177,9 +177,7 @@ class AMD64PagedMemory(intel.IA32PagedMemoryPae):
                         address_space=self.base)
                     continue
 
-                for x in self._get_available_PDEs(
-                        vaddr, pdpte_value, start, end):
-                    yield x
+                yield from self._get_available_PDEs(vaddr, pdpte_value, start, end)
 
     def _get_pte_addr(self, vaddr, pde_value):
         if pde_value & self.valid_mask:
@@ -203,7 +201,7 @@ class AMD64PagedMemory(intel.IA32PagedMemoryPae):
         pde_table = struct.unpack("<" + "Q" * 0x200, data)
 
         tmp2 = vaddr
-        for pde_index in range(0, 0x200):
+        for pde_index in range(0x200):
             vaddr = tmp2 + (pde_index << 21)
             if vaddr > end:
                 return
@@ -235,9 +233,9 @@ class AMD64PagedMemory(intel.IA32PagedMemoryPae):
             data = self.base.read(pte_table_addr, 8 * 0x200)
             pte_table = struct.unpack("<" + "Q" * 0x200, data)
 
-            for x in self._get_available_PTEs(
-                    pte_table, vaddr, start=start, end=end):
-                yield x
+            yield from self._get_available_PTEs(
+                pte_table, vaddr, start=start, end=end
+            )
 
     def _get_available_PTEs(self, pte_table, vaddr, start=0, end=2**64):
         tmp3 = vaddr
@@ -395,12 +393,10 @@ class XenParaVirtAMD64PagedMemory(AMD64PagedMemory):
 
         Yields tuples of (index, p2m) for each p2m, up to a number of p2m_size.
         """
-        for index, mfn in zip(
-                range(0, p2m_size),
-                struct.unpack(
-                    "<" + "Q" * p2m_size,
-                    self.read(offset, 0x1000))):
-            yield (index, mfn)
+        yield from zip(
+            range(p2m_size),
+            struct.unpack("<" + "Q" * p2m_size, self.read(offset, 0x1000)),
+        )
 
     def _RebuildM2PMapping(self):
         """Rebuilds the machine to physical mapping.
@@ -630,7 +626,7 @@ class XenParaVirtAMD64PagedMemory(AMD64PagedMemory):
         pde_table = struct.unpack("<" + "Q" * 0x200, data)
 
         tmp2 = vaddr
-        for pde_index in range(0, 0x200):
+        for pde_index in range(0x200):
             vaddr = tmp2 | (pde_index << 21)
             if vaddr > end:
                 return
@@ -662,9 +658,9 @@ class XenParaVirtAMD64PagedMemory(AMD64PagedMemory):
             data = self.base.read(pte_table_addr, 8 * 0x200)
             pte_table = struct.unpack("<" + "Q" * 0x200, data)
 
-            for x in self._get_available_PTEs(
-                    pte_table, vaddr, start=start, end=end):
-                yield x
+            yield from self._get_available_PTEs(
+                pte_table, vaddr, start=start, end=end
+            )
 
     def _get_available_PTEs(self, pte_table, vaddr, start=0, end=2**64):
         """Returns PFNs for each PTE entry."""
@@ -676,7 +672,7 @@ class XenParaVirtAMD64PagedMemory(AMD64PagedMemory):
 
             # When no translation was found, we skip the PTE, since we don't
             # know where it's pointing to.
-            if pte_value == None:
+            if pte_value is None:
                 continue
 
             if not pte_value & self.valid_mask:

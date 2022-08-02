@@ -35,40 +35,55 @@ def InodeToPermissionString(inode):
     """Represents an inode's permisions as an ls-like string."""
 
     result = []
-    if inode.type == "S_IFSOCK":
-        result.append("s")
+    if inode.type == "S_IFBLK":
+        result.append("b")
+    elif inode.type == "S_IFCHR":
+        result.append("c")
+    elif inode.type == "S_IFDIR":
+        result.append("d")
+    elif inode.type == "S_IFIFO":
+        result.append("f")
     elif inode.type == "S_IFLNK":
         result.append("l")
     elif inode.type == "S_IFREG":
         result.append("-")
-    elif inode.type == "S_IFBLK":
-        result.append("b")
-    elif inode.type == "S_IFDIR":
-        result.append("d")
-    elif inode.type == "S_IFCHR":
-        result.append("c")
-    elif inode.type == "S_IFIFO":
-        result.append("f")
+    elif inode.type == "S_IFSOCK":
+        result.append("s")
     else:
         result.append(" ")
 
-    result.append("r" if inode.mode.S_IRUSR else "-")
-    result.append("w" if inode.mode.S_IWUSR else "-")
+    result.extend(
+        (
+            "r" if inode.mode.S_IRUSR else "-",
+            "w" if inode.mode.S_IWUSR else "-",
+        )
+    )
+
     if inode.mode.S_ISUID:
         result.append("s" if inode.mode.S_IXUSR else "S")
     else:
         result.append("x" if inode.mode.S_IXUSR else "-")
 
-    result.append("r" if inode.mode.S_IRGRP else "-")
-    result.append("w" if inode.mode.S_IWGRP else "-")
+    result.extend(
+        (
+            "r" if inode.mode.S_IRGRP else "-",
+            "w" if inode.mode.S_IWGRP else "-",
+        )
+    )
+
     if inode.mode.S_ISGID:
         result.append("s" if inode.mode.S_IXGRP else "S")
     else:
         result.append("x" if inode.mode.S_IXGRP else "-")
 
-    result.append("r" if inode.mode.S_IROTH else "-")
-    result.append("w" if inode.mode.S_IWOTH else "-")
-    result.append("x" if inode.mode.S_IXOTH else "-")
+    result.extend(
+        (
+            "r" if inode.mode.S_IROTH else "-",
+            "w" if inode.mode.S_IWOTH else "-",
+            "x" if inode.mode.S_IXOTH else "-",
+        )
+    )
+
     if inode.mode.S_ISVTX:
         result.append("t" if inode.mode.S_IXOTH else "T")
 
@@ -161,11 +176,13 @@ class Mfind(common.LinuxPlugin):
         mountpoints = mount_plugin.get_mount_points()
 
         for mountpoint in mountpoints:
-            files = list(self.find(self.plugin_args.path,
-                                   device=self.plugin_args.device,
-                                   mountpoint=mountpoint))
-
-            if files:
+            if files := list(
+                self.find(
+                    self.plugin_args.path,
+                    device=self.plugin_args.device,
+                    mountpoint=mountpoint,
+                )
+            ):
                 divider = "Files on device %s mounted at %s.\n" % (
                     mountpoint.device, mountpoint.name)
                 yield dict(divider=divider)
@@ -208,8 +225,7 @@ class Mls(Mfind):
 
     def collect(self):
         for file_info in super(Mls, self).collect():
-            entry = file_info.get("file")
-            if entry:
+            if entry := file_info.get("file"):
                 yield dict(
                     divider="Files on device %s mounted at %s.\n" % (
                         entry.mountpoint.device, entry.mountpoint.name))
@@ -252,9 +268,9 @@ class Mcat(core.DirectoryDumperMixin, Mfind):
             # Write buffered output as a sparse file.
             path = file_info["path"]
             with renderer.open(
-                    filename=path,
-                    directory=self.plugin_args.dump_dir,
-                    mode="wb") as fd:
+                            filename=path,
+                            directory=self.plugin_args.dump_dir,
+                            mode="wb") as fd:
 
                 for range_start, range_end in file_obj.extents:
                     yield dict(start=range_start, end=range_end,
@@ -265,11 +281,7 @@ class Mcat(core.DirectoryDumperMixin, Mfind):
                         page_index = old_div(offset, page_size)
                         to_write = min(page_size, file_obj.size - offset)
                         data = file_obj.GetPage(page_index)
-                        if data != None:
-                            buffer += data[:to_write]
-                        else:
-                            buffer += b"\x00" * to_write
-
+                        buffer += data[:to_write] if data != None else b"\x00" * to_write
                         # Dump the buffer when it's full.
                         if len(buffer) >= buffer_size:
                             fd.write(buffer)

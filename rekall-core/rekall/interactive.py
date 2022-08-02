@@ -40,8 +40,7 @@ def ImportEnvironment(**kwargs):
 
     # For IPython fix up the completion.
     try:
-        shell = IPython.get_ipython()
-        if shell:
+        if shell := IPython.get_ipython():
             shell.Completer.matchers.insert(
                 0,
                 lambda x: ipython_support.RekallCompleter(shell.Completer, x))

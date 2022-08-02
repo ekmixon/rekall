@@ -68,13 +68,11 @@ class CleanCommand(Command):
         self.cwd = os.getcwd()
     def run(self):
         if os.getcwd() != self.cwd:
-            raise RuntimeError('Must be in package root: %s' % self.cwd)
+            raise RuntimeError(f'Must be in package root: {self.cwd}')
 
         os.system('rm -rf ./build ./dist')
 
-commands = {}
-commands["clean"] = CleanCommand
-
+commands = {"clean": CleanCommand}
 setup(
     name="rekall_agent",
     version=VERSION["pep440"],

@@ -73,8 +73,7 @@ class FindPlugins(plugin.TypedProfileCommand, plugin.ProfileCommand):
             if not issubclass(plugin_cls, pertinent_cls):
                 continue
 
-            table_header = plugin_cls.table_header
-            if table_header:
+            if table_header := plugin_cls.table_header:
                 if isinstance(table_header, list):
                     table_header = plugin.PluginHeader(*table_header)
 
@@ -133,11 +132,10 @@ class Collect(plugin.TypedProfileCommand, plugin.ProfileCommand):
             self.session.logging.debug("Producing %s from producer %r",
                                        self.type_name, producer)
             for result in producer.produce():
-                previous = results.get(result.indices)
-                if previous:
+                if previous := results.get(result.indices):
                     previous.obj_producers.add(producer.name)
                 else:
-                    result.obj_producers = set([producer.name])
+                    result.obj_producers = {producer.name}
                     results[result.indices] = result
 
         return six.itervalues(results)

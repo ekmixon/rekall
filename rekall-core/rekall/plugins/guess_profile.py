@@ -83,9 +83,7 @@ class DetectionMethod(with_metaclass(registry.MetaclassRegistry, object)):
 
         find_dtb_plugin = find_dtb_cls(session=self.session)
 
-        # Allow the dtb to be specified on the command line.
-        dtb = self.session.GetParameter("dtb")
-        if dtb:
+        if dtb := self.session.GetParameter("dtb"):
             # Verify the DTB to make sure it is correct.
             if not find_dtb_plugin.VerifyHit(dtb):
                 return
@@ -238,8 +236,7 @@ class WindowsIndexDetector(DetectionMethod):
             if match < threshold:
                 break
 
-            profile_obj = self.session.LoadProfile(profile)
-            if profile_obj:
+            if profile_obj := self.session.LoadProfile(profile):
                 return profile_obj
 
     def DetectFromHit(self, hit, filename_offset, address_space):
@@ -277,10 +274,9 @@ class WindowsIndexDetector(DetectionMethod):
             for offset, _ in scanner.scan(
                     offset=0xF80000000000, maxlen=0x10000000000):
                 kernel_base = offset & 0xFFFFFFFFFFFFFF000
-                profile_obj = self._match_profile_for_kernel_base(
-                    kernel_base, test_as)
-
-                if profile_obj:
+                if profile_obj := self._match_profile_for_kernel_base(
+                    kernel_base, test_as
+                ):
                     self.session.logging.debug(
                         "Verifying profile %s by scanning processes for a valid DTB",
                         profile_obj)
@@ -345,8 +341,9 @@ class WindowsRSDSDetector(DetectionMethod):
 
         # If the user allows it we can just try to fetch and build the profile
         # locally.
-        if profile == None and self.session.GetParameter(
-                "autodetect_build_local") in ("full", "basic"):
+        if profile is None and self.session.GetParameter(
+            "autodetect_build_local"
+        ) in ("full", "basic"):
             build_local_profile = self.session.plugins.build_local_profile()
             try:
                 self.session.logging.debug(
@@ -385,9 +382,7 @@ class WindowsRSDSDetector(DetectionMethod):
     def _test_rsds(self, rsds):
         if (rsds.Signature.is_valid() and
                 str(rsds.Filename) in self.KERNEL_NAMES):
-            profile = self.VerifyProfile("nt/GUID/%s" % rsds.GUID_AGE)
-
-            if profile:
+            if profile := self.VerifyProfile(f"nt/GUID/{rsds.GUID_AGE}"):
                 self.session.logging.info(
                     "Detected %s with GUID %s", rsds.Filename,
                     rsds.GUID_AGE)
@@ -427,8 +422,7 @@ class WindowsKernelImageDetector(WindowsRSDSDetector):
                 self.session.logging.info(
                     "Found RSDS in kernel image: %s (%s)",
                     rsds.GUID_AGE, rsds.Filename)
-                result = self._test_rsds(rsds)
-                if result:
+                if result := self._test_rsds(rsds):
                     return result
 
 
@@ -462,11 +456,11 @@ class LinuxIndexDetector(DetectionMethod):
 
         # We create a dictionary of symbol:offset skipping symbols from
         # exported modules.
-        symbol_dict = {}
-        for offset, symbol, _, module in kaslr_reader.ObtainSymbols():
-            # Ignore symbols in modules we only care about the kernel.
-            if not module:
-                symbol_dict[symbol] = offset
+        symbol_dict = {
+            symbol: offset
+            for offset, symbol, _, module in kaslr_reader.ObtainSymbols()
+            if not module
+        }
 
         if not symbol_dict:
             return
@@ -486,8 +480,7 @@ class LinuxIndexDetector(DetectionMethod):
                 matching_profiles[0][1],
                 len(self.index.traits[profile_id]))
 
-            profile = self.session.LoadProfile(profile_id)
-            if profile:
+            if profile := self.session.LoadProfile(profile_id):
                 # At this point we also know the kernel slide.
                 kallsyms_proc_banner = symbol_dict["linux_proc_banner"]
                 profile_proc_banner = profile.get_constant("linux_proc_banner",
@@ -496,8 +489,7 @@ class LinuxIndexDetector(DetectionMethod):
                 self.session.logging.info("Found slide 0x%x", kernel_slide)
                 self.session.SetCache("kernel_slide", kernel_slide)
 
-                verified_profile = self.VerifyProfile(profile)
-                if verified_profile:
+                if verified_profile := self.VerifyProfile(profile):
                     return verified_profile
                 else:
                     self.session.SetCache("kernel_slide", None)
@@ -526,8 +518,7 @@ class LinuxBannerDetector(DetectionMethod):
 
     def DetectFromHit(self, hit, offset, address_space):
         guess = address_space.read(offset - 100, 300)
-        m = self.LINUX_TEMPLATE.search(guess)
-        if m:
+        if m := self.LINUX_TEMPLATE.search(guess):
             # Try to guess the distribution.
             distribution = "LinuxGeneric"
             if b"Ubuntu" in guess:
@@ -536,7 +527,7 @@ class LinuxBannerDetector(DetectionMethod):
             if b"Debian" in guess:
                 distribution = "Debian"
 
-            profile_name = "%s/%s" % (distribution, utils.SmartUnicode(m.group(1)))
+            profile_name = f"{distribution}/{utils.SmartUnicode(m.group(1))}"
             profile = self.session.LoadProfile(profile_name)
             if profile:
                 self.session.logging.info(
@@ -587,8 +578,7 @@ class DarwinIndexDetector(DetectionMethod):
         for profile_name, match in self.index.LookupIndex(
                 image_base=offset,
                 address_space=self.session.physical_address_space):
-            profile = self.VerifyProfile(profile_name)
-            if profile:
+            if profile := self.VerifyProfile(profile_name):
                 self.session.logging.info(
                     "New best match: %s (%.0f%% match)",
                     profile_name, match * 100)
@@ -651,8 +641,10 @@ class ProfileHook(kb.ParameterHook):
                                "Use the --autodetect parameter.")
 
         for method_name in method_names:
-            for method in DetectionMethod.classes_by_name[method_name]:
-                methods.append(method(session=self.session))
+            methods.extend(
+                method(session=self.session)
+                for method in DetectionMethod.classes_by_name[method_name]
+            )
 
         methods.sort(key=lambda x: x.order)
         for method in methods:
@@ -685,8 +677,7 @@ class ProfileHook(kb.ParameterHook):
                 "guess_profile: autodetection hit @ %x - %s", offset, hit)
 
             for method in needle_lookup[hit]:
-                profile = method.DetectFromHit(hit, offset, address_space)
-                if profile:
+                if profile := method.DetectFromHit(hit, offset, address_space):
                     self.session.logging.debug(
                         "Detection method %s worked at offset %#x",
                         method.name, offset)
@@ -726,32 +717,28 @@ class ProfileHook(kb.ParameterHook):
         """Try to find the correct profile by scanning for PDB files."""
         # Clear the profile for the duration of the scan.
         self.session.profile = obj.NoneObject("Unset")
-        if not self.session.physical_address_space:
-            # Try to load the physical_address_space so we can scan it.
-            if not self.session.plugins.load_as().GetPhysicalAddressSpace():
-                # If a filename was specified this should have worked, unless we
-                # could not open it.
-                filename = self.session.GetParameter("filename")
-                if filename:
-                    raise RuntimeError(
-                        "Unable to instantiate physical_address_space from "
-                        "filename %s." % filename)
+        if (
+            not self.session.physical_address_space
+            and not self.session.plugins.load_as().GetPhysicalAddressSpace()
+        ):
+            if filename := self.session.GetParameter("filename"):
+                raise RuntimeError(
+                    "Unable to instantiate physical_address_space from "
+                    "filename %s." % filename)
 
-                # No physical address space - nothing to do here.
-                return obj.NoneObject("No Physical Address Space.")
+            # No physical address space - nothing to do here.
+            return obj.NoneObject("No Physical Address Space.")
 
         # If the global cache is persistent we try to detect this image by
         # fingerprint if we have seen it before.
         if self.session.cache.__class__ == cache.FileCache:
-            name = self.session.cache.DetectImage(
-                self.session.physical_address_space)
-            if name:
+            if name := self.session.cache.DetectImage(
+                self.session.physical_address_space
+            ):
                 self.session.logging.info(
                     "Detected fingerprinted image %s", name)
 
-        # Allow the user to specify the profile to use on the command line.
-        profile_name = self.session.GetParameter("profile")
-        if profile_name:
+        if profile_name := self.session.GetParameter("profile"):
             profile_obj = self.session.LoadProfile(profile_name)
             if profile_obj != None:
                 return profile_obj
@@ -760,10 +747,10 @@ class ProfileHook(kb.ParameterHook):
         profile_obj = self.session.cache.Get("profile_obj")
         if not profile_obj:
             profile_obj = self.ScanProfiles()
-            if not profile_obj:
-                raise RuntimeError(
-                    "Unable to find a valid profile for this image. "
-                    "Try using -v for more details.")
+        if not profile_obj:
+            raise RuntimeError(
+                "Unable to find a valid profile for this image. "
+                "Try using -v for more details.")
 
         # Update the session profile.
         self.session.profile = profile_obj

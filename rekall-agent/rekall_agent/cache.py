@@ -75,9 +75,7 @@ class LocalDiskCache(Cache):
         # Where we need to write the file inside the cache.
         destination = self.get_local_file(path, generation)
 
-        # First make sure we remove any current generations of the path.
-        current_generation = self.get_generation(path)
-        if current_generation:
+        if current_generation := self.get_generation(path):
             current_generation_path = self.get_local_file(
                 path, current_generation)
 
@@ -101,8 +99,7 @@ class LocalDiskCache(Cache):
         shutil.move(local_filename, destination)
 
     def expire(self, path):
-        current_generation = self.get_generation(path)
-        if current_generation:
+        if current_generation := self.get_generation(path):
             current_generation_path = self.get_local_file(
                 path, current_generation)
 
@@ -131,8 +128,9 @@ class LocalDiskCache(Cache):
             pass
 
     def get_local_file(self, path, generation):
-        return os.path.join(self.cache_directory, path.lstrip(os.path.sep),
-                            "@" + generation + "@")
+        return os.path.join(
+            self.cache_directory, path.lstrip(os.path.sep), f"@{generation}@"
+        )
 
     def store_at_generation(self, path, generation, data=None, fd=None,
                             iterator=None):
@@ -145,8 +143,10 @@ class LocalDiskCache(Cache):
           fd: If specified we read from the fd and copy to the new file.
           iterator: An iterator that generates data to write.
         """
-        file_path = os.path.join(self.cache_directory, path.lstrip(os.path.sep),
-                                 "@" + generation + "@")
+        file_path = os.path.join(
+            self.cache_directory, path.lstrip(os.path.sep), f"@{generation}@"
+        )
+
         containing_dir_path = os.path.dirname(file_path)
 
         # Clear the previous generations.
@@ -193,8 +193,7 @@ class LocalDiskCache(Cache):
         return file_path
 
     def stat(self, path):
-        generation = self.get_generation(path)
-        if generation:
+        if generation := self.get_generation(path):
             subpath = self.get_local_file(path, generation)
             s = os.lstat(subpath)
             return dict(
@@ -213,8 +212,7 @@ class LocalDiskCache(Cache):
                 for filename in files:
                     if filename.startswith("@") and filename.endswith("@"):
                         generation = filename[1:-1]
-                        subpath = "/" + os.path.relpath(
-                            root, self.cache_directory)
+                        subpath = f"/{os.path.relpath(root, self.cache_directory)}"
 
                         s = os.lstat(os.path.join(root, filename))
                         yield dict(

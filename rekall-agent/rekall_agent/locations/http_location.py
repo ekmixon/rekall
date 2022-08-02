@@ -77,12 +77,11 @@ class HTTPLocationImpl(common.AgentConfigMixin, location.HTTPLocation):
     def __init__(self, *args, **kwargs):
         super(HTTPLocationImpl, self).__init__(*args, **kwargs)
         if not isinstance(self._session, session.Session):
-            raise TypeError("%s must be instantiated with a Rekall Session" %
-                            self.__class__)
+            raise TypeError(f"{self.__class__} must be instantiated with a Rekall Session")
 
     def get_requests_session(self):
         requests_session = self._session.GetParameter("requests_session")
-        if requests_session == None:
+        if requests_session is None:
             # To make sure we can use the requests session in the threadpool we
             # need to make sure that the connection pool can block. Otherwise it
             # will raise when it runs out of connections and the threads will be
@@ -112,17 +111,12 @@ class HTTPLocationImpl(common.AgentConfigMixin, location.HTTPLocation):
         if not self.path_prefix and not self.base:
             raise IOError("No base URL specified.")
 
-        subpath = self.expand_path(**kwargs)
-        if subpath:
+        if subpath := self.expand_path(**kwargs):
             path = utils.join_path(self.path_prefix, subpath)
         else:
             path = self.path_prefix
 
-        if path:
-            base_url = _join_url(self.base, path)
-        else:
-            base_url = self.base
-
+        base_url = _join_url(self.base, path) if path else self.base
         headers = {
             "Cache-Control": "private",
         }
@@ -178,10 +172,11 @@ class HTTPLocationImpl(common.AgentConfigMixin, location.HTTPLocation):
                       message=None):
         if response:
             # Only include the text in case of error.
-            if not response.ok:
-                status = location.Status(response.status_code, response.text)
-            else:
-                status = location.Status(response.status_code)
+            status = (
+                location.Status(response.status_code)
+                if response.ok
+                else location.Status(response.status_code, response.text)
+            )
 
         else:
             status = location.Status(500, message)
@@ -190,10 +185,10 @@ class HTTPLocationImpl(common.AgentConfigMixin, location.HTTPLocation):
             if completion_routine:
                 return completion_routine(status)
 
-            raise IOError(response.text)
-        else:
-            if completion_routine:
-                completion_routine(status)
+            else:
+                raise IOError(response.text)
+        elif completion_routine:
+            completion_routine(status)
 
         return location.Status(200, response.content)
 
@@ -229,9 +224,7 @@ class Reader(object):
         self.len = len(self._start) + self.get_len(self.fd) + len(self._end)
 
     def content_type(self):
-        return str(
-            'multipart/form-data;boundary="{0}"'.format(self._boundary)
-            )
+        return 'multipart/form-data;boundary="{0}"'.format(self._boundary)
 
     def get_len(self, fd):
         """Figure out the total length of fd."""
@@ -315,10 +308,9 @@ class FirbaseNotifier(HTTPLocationImpl, location.NotificationLocation):
     def Start(self, callback):
         client_id = self._config.client.writeback.client_id
         client_id_hash = hashlib.sha1(client_id).hexdigest()
-        url_endpoint = "%s/%s.json" % (self.base, client_id_hash)
+        url_endpoint = f"{self.base}/{client_id_hash}.json"
 
-        headers = {}
-        headers['Accept'] = 'text/event-stream'
+        headers = {'Accept': 'text/event-stream'}
         while 1:
             resp = self.get_requests_session().get(
                 url_endpoint, headers=headers, stream=True)

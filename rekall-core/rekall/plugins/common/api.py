@@ -72,8 +72,7 @@ class APIGenerator(plugin.TypedProfileCommand,
                 result[attr] = copy.copy(value)
 
         for attr in ["positional", "required", "hidden"]:
-            value = getattr(option, attr, False)
-            if value:
+            if value := getattr(option, attr, False):
                 result[attr] = copy.copy(value)
 
         return result
@@ -82,8 +81,7 @@ class APIGenerator(plugin.TypedProfileCommand,
         """Collects the args from the plugin."""
         args = yaml_utils.OrderedYamlDict()
         for subclass in cls.__mro__:
-            for definition in getattr(
-                    subclass, "_%s__args" % subclass.__name__, []):
+            for definition in getattr(subclass, f"_{subclass.__name__}__args", []):
                 # Definitions can be just simple dicts.
                 if isinstance(definition, dict):
                     definition = plugin.CommandOption(**definition)
@@ -102,8 +100,7 @@ class APIGenerator(plugin.TypedProfileCommand,
 
     def _clean_up_doc(self, doc):
         title = body = ""
-        doc = doc.strip()
-        if doc:
+        if doc := doc.strip():
             lines = doc.splitlines()
             title = lines[0]
             if len(lines) > 1:
@@ -126,8 +123,7 @@ class APIGenerator(plugin.TypedProfileCommand,
             result["plugin"] = plugin_name
             result["name"] = cls.name
             result["description"] = docstring
-            args = self.get_plugin_args(cls)
-            if args:
+            if args := self.get_plugin_args(cls):
                 result["args"] = args
 
             result["active_modes"] = self.get_active_modes(cls)

@@ -105,7 +105,7 @@ class Info(plugin.Command):
             line = line[dedent:]
 
             m = re.match(r"\s*", line)
-            leading_space = len(m.group(0))
+            leading_space = len(m[0])
 
             text = line[leading_space:]
 
@@ -117,27 +117,21 @@ class Info(plugin.Command):
                 continue
 
             if first_line and last_leading_space != leading_space:
-                if text:
-                    paragraph.append(text)
-
                 last_leading_space = leading_space
                 first_line = False
 
             elif leading_space != last_leading_space:
-                if paragraph:
-                    yield paragraph, first_line_indent
+                yield paragraph, first_line_indent
 
                 paragraph = []
-                if text:
-                    paragraph.append(text)
                 last_leading_space = leading_space
                 first_line_indent = leading_space
                 first_line = True
             else:
-                if text:
-                    paragraph.append(text)
-
                 first_line = False
+
+            if text:
+                paragraph.append(text)
 
         if paragraph:
             yield paragraph, first_line_indent
@@ -154,13 +148,12 @@ class Info(plugin.Command):
         doc = ""
 
         for line in arg_string.splitlines():
-            m = re.match(r"\s+([^\s]+):(.+)", line)
-            if m:
+            if m := re.match(r"\s+([^\s]+):(.+)", line):
                 if parameter:
                     yield parameter, doc
 
-                parameter = m.group(1)
-                doc = m.group(2)
+                parameter = m[1]
+                doc = m[2]
             else:
                 doc += "\n" + line
 
@@ -211,10 +204,9 @@ class Info(plugin.Command):
         renderer.write("\n")
 
     def _clean_up_doc(self, doc, dedent=0):
-        clean_doc = []
-        for paragraph in self.split_into_paragraphs(
-                " " * dedent + doc, dedent=dedent, wrap=70):
-            clean_doc.append(paragraph)
+        clean_doc = list(
+            self.split_into_paragraphs(" " * dedent + doc, dedent=dedent, wrap=70)
+        )
 
         return "\n".join(clean_doc)
 
@@ -287,8 +279,7 @@ class FindDTB(plugin.PhysicalASMixin, plugin.ProfileCommand):
         else:
             impl = 'IA32PagedMemory'
 
-        as_class = addrspace.BaseAddressSpace.classes[impl]
-        return as_class
+        return addrspace.BaseAddressSpace.classes[impl]
 
 
 class LoadAddressSpace(plugin.Command):
@@ -336,8 +327,7 @@ class LoadAddressSpace(plugin.Command):
         pid@pid_number: Use the process address space for the specified pid.
         """
         if name is None:
-            result = self.session.GetParameter("default_address_space")
-            if result:
+            if result := self.session.GetParameter("default_address_space"):
                 return result
 
             name = "K"
@@ -346,26 +336,24 @@ class LoadAddressSpace(plugin.Command):
         if isinstance(name, addrspace.BaseAddressSpace):
             return name
 
-        if name == "K" or name == "Kernel":
+        if name in ["K", "Kernel"]:
             return (self.session.kernel_address_space or
                     self.GetVirtualAddressSpace())
 
-        if name == "P" or name == "Physical":
+        if name in ["P", "Physical"]:
             return (self.session.physical_address_space or
                     self.GetPhysicalAddressSpace())
 
-        m = self.ADDRESS_SPACE_RE.match(name)
-        if m:
+        if m := self.ADDRESS_SPACE_RE.match(name):
             arg = int(m.group(2), 0)
             if m.group(1) == "pid":
                 for task in self.session.plugins.pslist(
                         pids=arg).filter_processes():
                     self.session.plugins.cc().SwitchProcessContext(task)
                     return task.get_process_address_space()
-                raise AttributeError("Process pid %s not found" % arg)
+                raise AttributeError(f"Process pid {arg} not found")
 
-            as_cls = addrspace.BaseAddressSpace.classes.get(m.group(1))
-            if as_cls:
+            if as_cls := addrspace.BaseAddressSpace.classes.get(m.group(1)):
                 return as_cls(session=self.session, dtb=arg,
                               base=self.GetPhysicalAddressSpace())
 
@@ -383,7 +371,7 @@ class LoadAddressSpace(plugin.Command):
             return self.session.physical_address_space
 
         except addrspace.ASAssertionError as e:
-            self.session.logging.error("Could not create address space: %s" % e)
+            self.session.logging.error(f"Could not create address space: {e}")
 
         return self.session.physical_address_space
 
@@ -402,7 +390,7 @@ class LoadAddressSpace(plugin.Command):
             raise plugin.PluginError("Unable to find physical address space.")
 
         self.profile = self.session.profile
-        if self.profile == None:
+        if self.profile is None:
             raise plugin.PluginError(
                 "Must specify a profile to load virtual AS.")
 
@@ -412,7 +400,7 @@ class LoadAddressSpace(plugin.Command):
             dtb = self.session.GetParameter("dtb")
 
         find_dtb = self.session.plugins.find_dtb()
-        if find_dtb == None:
+        if find_dtb is None:
             return find_dtb
 
         if dtb:
@@ -514,7 +502,7 @@ class LoadAddressSpace(plugin.Command):
         for as_name in specification.split(":"):
             as_cls = addrspace.BaseAddressSpace.classes.get(as_name)
             if as_cls is None:
-                raise addrspace.Error("No such address space %s" % as_name)
+                raise addrspace.Error(f"No such address space {as_name}")
 
             base_as = as_cls(base=base_as, session=self.session, **kwargs)
 
@@ -560,7 +548,7 @@ class DirectoryDumperMixin(object):
                 "Please specify a dump directory.")
 
         if dump_dir and not os.path.isdir(dump_dir):
-            raise plugin.PluginError("%s is not a directory" % self.dump_dir)
+            raise plugin.PluginError(f"{self.dump_dir} is not a directory")
 
     def CopyToFile(self, address_space, start, end, outfd):
         """Copy a part of the address space to the output file.
@@ -700,18 +688,18 @@ class DT(plugin.TypedProfileCommand, plugin.ProfileCommand):
             base_member = struct.m(k)
 
             offset = base_member.obj_offset
-            if offset == None:  # NoneObjects screw up sorting order here.
+            if offset is None:  # NoneObjects screw up sorting order here.
                 offset = -1
 
             fields.append((offset, k, member))
 
         for offset, k, v in sorted(fields):
-            if self.plugin_args.member_offset is not None:
-                if offset == self.plugin_args.member_offset:
-                    renderer.table_row(offset, k, v, depth=depth)
-            else:
+            if (
+                self.plugin_args.member_offset is not None
+                and offset == self.plugin_args.member_offset
+                or self.plugin_args.member_offset is None
+            ):
                 renderer.table_row(offset, k, v, depth=depth)
-
             if isinstance(v, obj.Struct):
                 self._render_Struct(renderer, v, depth=depth + 1)
 
@@ -793,15 +781,14 @@ class AddressMap(object):
         labels = []
         for i in range(start, end):
             start, end, hit = self.collection.get_containing_range(i)
-            if hit:
-                if hit not in labels:
-                    labels.append(hit)
+            if hit and hit not in labels:
+                labels.append(hit)
 
         result = ""
         highlights = []
         for label, fg, bg in labels:
             highlights.append((len(result), len(result) + len(label), fg, bg))
-            result += label + ", "
+            result += f"{label}, "
 
         # Drop the last ,
         if result:
@@ -889,7 +876,7 @@ class Dump(plugin.TypedProfileCommand, plugin.Command):
                 self.plugin_args.length = len(self.plugin_args.data)
 
     def collect(self):
-        if self.offset == None:
+        if self.offset is None:
             return
 
         to_read = min(
@@ -901,8 +888,7 @@ class Dump(plugin.TypedProfileCommand, plugin.Command):
 
         resolver = self.session.address_resolver
         for offset in range(self.offset, self.offset + to_read):
-            comment = resolver.format_address(offset, max_distance=0)
-            if comment:
+            if comment := resolver.format_address(offset, max_distance=0):
                 self.address_map.AddRange(offset, offset + 1, ",".join(comment))
 
         offset = self.offset
@@ -1034,7 +1020,7 @@ class SetProcessContextMixin(object):
     def SwitchProcessContext(self, process=None):
         current_address_space = self.session.GetCache("default_address_space")
 
-        if process == None:
+        if process is None:
             # Nothing to do.
             if current_address_space == self.session.kernel_address_space:
                 return ""

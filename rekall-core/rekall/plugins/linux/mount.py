@@ -125,8 +125,12 @@ class Mount(common.LinuxPlugin):
                 # The name of the filesystem
                 fs_type = sb.s_type.name.deref()
 
-                if (not devname.is_valid() or len(str(devname)) == 0 or
-                    not fs_type.is_valid() or len(str(fs_type)) == 0):
+                if (
+                    not devname.is_valid()
+                    or not str(devname)
+                    or not fs_type.is_valid()
+                    or not str(fs_type)
+                ):
                     continue
 
                 # http://lxr.free-electrons.com/source/fs/proc_namespace.c#L92
@@ -156,10 +160,7 @@ class Mount(common.LinuxPlugin):
 
             # A mountpoint has read-write permissions if it's not readonly.
             if not mountpoint.flags.ro:
-                if mountpoint.sb.s_flags & 0x01:
-                    additional_flag = "ro"
-                else:
-                    additional_flag = "rw"
+                additional_flag = "ro" if mountpoint.sb.s_flags & 0x01 else "rw"
                 flags_string = ', '.join([additional_flag, flags_string])
 
             yield dict(Device=mountpoint.device,

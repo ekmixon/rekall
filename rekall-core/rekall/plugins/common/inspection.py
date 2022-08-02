@@ -49,9 +49,7 @@ class MemoryTranslation(plugin.KernelASMixin,
         if address_space is None:
             return ""
 
-        if address_space.name:
-            return address_space.name
-        return address_space.__class__.__name__
+        return address_space.name or address_space.__class__.__name__
 
     def collect(self):
         address_space = self.session.GetParameter("default_address_space")

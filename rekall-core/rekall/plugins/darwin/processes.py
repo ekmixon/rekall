@@ -67,18 +67,14 @@ class DarwinPsxView(common.ProcessFilterMixin,
     def table_header(cls):
         header = [dict(width=40, name="proc", type="proc")]
 
-        for method in cls.methods():
-            header.append(dict(name=method, width=8))
-
+        header.extend(dict(name=method, width=8) for method in cls.methods())
         return plugin.PluginHeader(*header)
 
     def collect(self):
         methods = self.methods()
         for proc in self.filter_processes():
             row = [proc]
-            for method in methods:
-                row.append(method in proc.obj_producers)
-
+            row.extend(method in proc.obj_producers for method in methods)
             yield row
 
 
@@ -104,8 +100,7 @@ class DarwinPsTree(common.AbstractDarwinCommand):
         if proc.validate():
             yield proc, depth
         for child in proc.p_children.lh_first.p_sibling:
-            for subproc, subdepth in self.recurse_proc(child, depth + 1):
-                yield subproc, subdepth
+            yield from self.recurse_proc(child, depth + 1)
 
 
 class DarwinMaps(common.ProcessFilterMixin, common.AbstractDarwinCommand):
@@ -251,8 +246,7 @@ class PsListTasksHook(common.AbstractDarwinParameterHook):
             vm=self.session.kernel_address_space)
 
         for task in tasks.list_of_type("task", "tasks"):
-            proc = task.bsd_info.deref()
-            if proc:
+            if proc := task.bsd_info.deref():
                 seen.add(proc.obj_offset)
 
         return seen

@@ -65,10 +65,7 @@ class KAllSyms(object):
           Tuple of offset, symbol_name, type, module
         """
 
-        matches = None
-        if line:
-            matches = re.match(self.KALLSYMS_REGEXP, line.rstrip("\n"))
-
+        matches = re.match(self.KALLSYMS_REGEXP, line.rstrip("\n")) if line else None
         if not matches:
             raise ValueError("Invalid line: %s", line)
 
@@ -131,10 +128,7 @@ class KAllSyms(object):
 
     def _OpenLiveSymbolsFile(self, physical_address_space):
         """Opens the live symbols file to parse."""
-        file_as = physical_address_space.get_file_address_space(
-            self.KALLSYMS_FILE)
-
-        return file_as
+        return physical_address_space.get_file_address_space(self.KALLSYMS_FILE)
 
 
 class AbstractLinuxCommandPlugin(plugin.PhysicalASMixin,
@@ -161,8 +155,7 @@ class LinuxFindDTB(AbstractLinuxCommandPlugin, core.FindDTB):
 
     def VerifyHit(self, dtb):
         """Returns a valid address_space if the dtb is valid."""
-        address_space = super(LinuxFindDTB, self).VerifyHit(dtb)
-        if address_space:
+        if address_space := super(LinuxFindDTB, self).VerifyHit(dtb):
             # Try to verify the profile by checking the linux_proc_banner.
             # This is to discard kernel version strings found in memory we may
             # know about but that don't really work with the current image.
@@ -179,12 +172,9 @@ class LinuxFindDTB(AbstractLinuxCommandPlugin, core.FindDTB):
         architecture = self.profile.metadata("arch")
         if architecture == "AMD64":
 
-            # XEN PV guests have a mapping in p2m_top. We verify this symbol
-            # is not NULL.
-            pv_info_virt = self.profile.get_constant(
-                "pv_info", is_address=True)
-
-            if pv_info_virt:
+            if pv_info_virt := self.profile.get_constant(
+                "pv_info", is_address=True
+            ):
                 pv_info_phys = self.profile.phys_addr(pv_info_virt)
                 pv_info = self.session.profile.pv_info(
                     offset=pv_info_phys,
@@ -264,24 +254,20 @@ class LinProcessFilter(LinuxPlugin):
 
     def list_from_task_head(self):
         for task_offset in self.plugin_args.task:
-            task = self.profile.task_struct(
-                offset=task_offset, vm=self.kernel_address_space)
-
-            yield task
+            yield self.profile.task_struct(
+                offset=task_offset, vm=self.kernel_address_space
+            )
 
     def list_tasks(self):
-        seen = set()
-        for proc in self.list_from_task_head():
-            seen.add(proc.obj_offset)
-
+        seen = {proc.obj_offset for proc in self.list_from_task_head()}
         for method in self.plugin_args.method:
-            for proc in self.session.GetParameter("pslist_%s" % method):
+            for proc in self.session.GetParameter(f"pslist_{method}"):
                 seen.add(proc)
 
-        result = []
-        for x in seen:
-            result.append(self.profile.task_struct(
-                x, vm=self.session.kernel_address_space))
+        result = [
+            self.profile.task_struct(x, vm=self.session.kernel_address_space)
+            for x in seen
+        ]
 
         return sorted(result, key=lambda x: x.pid)
 
@@ -289,22 +275,19 @@ class LinProcessFilter(LinuxPlugin):
         """Filters eprocess list using pids lists."""
         # If eprocess are given specifically only use those.
         if self.plugin_args.task:
-            for task in self.list_from_task_head():
-                yield task
-
+            yield from self.list_from_task_head()
         else:
             for proc in self.list_tasks():
                 if not self.filtering_requested:
                     yield proc
 
-                else:
-                    if int(proc.pid) in self.plugin_args.pids:
-                        yield proc
+                elif int(proc.pid) in self.plugin_args.pids:
+                    yield proc
 
-                    elif (self.plugin_args.proc_regex and
-                          self.plugin_args.proc_regex.match(
-                              utils.SmartUnicode(proc.name))):
-                        yield proc
+                elif (self.plugin_args.proc_regex and
+                      self.plugin_args.proc_regex.match(
+                          utils.SmartUnicode(proc.name))):
+                    yield proc
 
     def virtual_process_from_physical_offset(self, physical_offset):
         """Tries to return an task in virtual space from a physical offset.
@@ -343,9 +326,9 @@ class HeapScannerMixIn(object):
             end = min(vma.vm_end, self.task.mm.brk)
 
             # Only use the vmas inside the heap area.
-            for hit in super(HeapScannerMixIn, self).scan(
-                    offset=start, maxlen=end-start):
-                yield hit
+            yield from super(HeapScannerMixIn, self).scan(
+                offset=start, maxlen=end - start
+            )
 
 
 class KernelAddressCheckerMixIn(object):
@@ -382,7 +365,7 @@ class Hostname(AbstractLinuxCommandPlugin):
             if domainname == default_hostname:
                 hostname = nodename
             else:
-                hostname = "%s.%s" % (nodename, domainname)
+                hostname = f"{nodename}.{domainname}"
         return hostname
 
     def render(self, renderer):

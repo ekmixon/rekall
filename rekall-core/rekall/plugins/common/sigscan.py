@@ -81,11 +81,7 @@ class SignatureScannerCheck(scan.ScannerCheck):
             # or we might report identical parts only once.
             correction = len(self.needles[self.current_needle - 1])
         dindex = buffer_as.data.find(next_part, buffer_offset + correction)
-        if dindex > -1:
-            return dindex - buffer_offset
-
-        # Skip entire region.
-        return buffer_as.end() - offset
+        return dindex - buffer_offset if dindex > -1 else buffer_as.end() - offset
 
 
 class SignatureScanner(scan.BaseScanner):
@@ -99,9 +95,7 @@ class SignatureScanner(scan.BaseScanner):
             needles=self.needles)
 
     def check_addr(self, offset, buffer_as=None):
-        # Ask the check if this offset is possible.
-        val = self.check.check(buffer_as, offset)
-        if val:
+        if val := self.check.check(buffer_as, offset):
             return offset, val
 
     def skip(self, buffer_as, offset):
@@ -164,8 +158,7 @@ class SigScanMixIn(object):
                 try:
                     decoded_parts.append(binascii.unhexlify(p))
                 except TypeError:
-                    raise plugin.PluginError(
-                        "Signature %s has invalid format." % sig)
+                    raise plugin.PluginError(f"Signature {sig} has invalid format.")
             self.signatures.append(decoded_parts)
         self.scan_physical = scan_physical
         self.scan_kernel = scan_kernel

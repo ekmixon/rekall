@@ -125,11 +125,10 @@ def WK_pack_4bits(source_buf):
 
 def WK_pack_3_tenbits(source_buf):
 
-    packed_input = []
-    for in1, in2, in3 in zip(*([iter(source_buf)] * 3)):
-        packed_input.append(in1 | (in2 << 10) | (in3 << 20))
-
-    return packed_input
+    return [
+        in1 | (in2 << 10) | (in3 << 20)
+        for in1, in2, in3 in zip(*([iter(source_buf)] * 3))
+    ]
 
 
 # /***************************************************************************
@@ -209,9 +208,7 @@ def WK_unpack_3_tenbits(input_buf):
     return output
 
 def WKdm_compress(src_buf):
-    dictionary = []
-    for _ in range(DICTIONARY_SIZE):
-        dictionary.append((1, 0))
+    dictionary = [(1, 0) for _ in range(DICTIONARY_SIZE)]
     hashLookupTable = HASH_LOOKUP_TABLE_CONTENTS
 
     tempTagsArray = []
@@ -237,14 +234,13 @@ def WKdm_compress(src_buf):
             tempQPosArray.append(dict_location)
         elif (input_word == 0):
             tempTagsArray.append(ZERO_TAG)
+        elif input_high_bits == dict_high:
+            tempTagsArray.append(PARTIAL_TAG)
+            tempQPosArray.append(dict_location)
+            tempLowBitsArray.append((input_word % 1024))
         else:
-            if input_high_bits == dict_high:
-                tempTagsArray.append(PARTIAL_TAG)
-                tempQPosArray.append(dict_location)
-                tempLowBitsArray.append((input_word % 1024))
-            else:
-                tempTagsArray.append(MISS_TAG)
-                full_patterns.append(input_word)
+            tempTagsArray.append(MISS_TAG)
+            full_patterns.append(input_word)
 
         dictionary[dict_location] = (input_word, input_high_bits)
 
@@ -314,8 +310,7 @@ def _WKdm_decompress(src_buf, qpos_start, low_start, low_end, header_size):
     num_lowbits_words = old_div(num_lowbits_bytes, 4)
     num_packed_lowbits = num_lowbits_words * 3
 
-    rem = len(lowbits_str) % 16
-    if rem:
+    if rem := len(lowbits_str) % 16:
         lowbits_str += "\x00" * (16 - rem)
 
     packed_lowbits = struct.unpack("I" * (old_div(len(lowbits_str), 4)), lowbits_str)

@@ -48,7 +48,7 @@ class VMemAddressSpace(addrspace.RunBasedAddressSpace):
 
         super(VMemAddressSpace, self).__init__(base=base, **kwargs)
 
-        vmss_location = base.fname[:-4] + "vmss"
+        vmss_location = f"{base.fname[:-4]}vmss"
         try:
             vmss_as = standard.FileAddressSpace(
                 filename=vmss_location, session=self.session)
@@ -150,12 +150,7 @@ class _VMWARE_HEADER(obj.Struct):
             if group.Name != group_name:
                 continue
 
-            for tag in group.Tags:
-                if tag.Name != tag_name:
-                    continue
-
-                result.append(tag)
-
+            result.extend(tag for tag in group.Tags if tag.Name == tag_name)
         return result
 
     def GetTagsData(self, group_name, tag_name):
@@ -205,9 +200,7 @@ class _VMWARE_TAG(obj.Struct):
                 return self.obj_profile._VMWARE_EXTENDED_DATA64(
                     data_offset, vm=self.obj_vm).Data
 
-        # Is the data member a simple type?
-        data_type = self.DATA_MAP.get(data_size)
-        if data_type:
+        if data_type := self.DATA_MAP.get(data_size):
             return self.obj_profile.Object(
                 data_type, offset=data_offset, vm=self.obj_vm)
 

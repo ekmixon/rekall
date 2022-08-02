@@ -61,10 +61,10 @@ class ModificationTimeCondition(FileFilterCondition):
     def get_efilter_clause(self):
         result = []
         if self.min:
-            result.append("Path.st_mtime > %s" % self.min)
+            result.append(f"Path.st_mtime > {self.min}")
 
         if self.max:
-            result.append("Path.st_mtime < %s" % self.max)
+            result.append(f"Path.st_mtime < {self.max}")
 
         return "(" + " and ".join(result) + ")"
 
@@ -100,7 +100,7 @@ class FileFinderFlow(collect.CollectFlow):
         # This code just saves some typing :-).
         column_spec = collections.OrderedDict()
         for x in collection.tables[0].columns:
-            column_spec[x.name] = "path.%s" % x.name
+            column_spec[x.name] = f"path.{x.name}"
 
         column_spec["dirname"] = "path.filename.dirname"
         column_spec["filename"] = "path.filename.basename"
@@ -108,7 +108,7 @@ class FileFinderFlow(collect.CollectFlow):
         column_spec["st_uid"] = "path.st_uid.uid"
         column_spec["st_gid"] = "path.st_gid.gid"
 
-        columns = ["%s as %s" % (v, k) for k, v in column_spec.items()]
+        columns = [f"{v} as {k}" for k, v in column_spec.items()]
 
         result = (
             "select %s from glob({globs}, path_sep: {path_sep})" %
@@ -207,9 +207,12 @@ class ListDirectory(agent.Flow):
                 expiration=self.expiration())
 
         return self._config.server.vfs_path_for_client(
-            self.client_id, "%s/%s" % (self.path, self.flow_id),
-            expiration=self.expiration(), vfs_type="collections",
-            mode="w")
+            self.client_id,
+            f"{self.path}/{self.flow_id}",
+            expiration=self.expiration(),
+            vfs_type="collections",
+            mode="w",
+        )
 
     def validate(self):
         super(ListDirectory, self).validate()

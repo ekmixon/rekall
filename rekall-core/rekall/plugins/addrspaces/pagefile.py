@@ -56,9 +56,7 @@ class PagefilePhysicalAddressSpace(addrspace.RunBasedAddressSpace):
         # FIXME: Properly support multiple pagefiles.
         load_as = self.session.plugins.load_as(session=session.Session())
         for pagefile_name in pagefile_names:
-            pagefile_as = load_as.GuessAddressSpace(filename=pagefile_name)
-
-            if pagefile_as:
+            if pagefile_as := load_as.GuessAddressSpace(filename=pagefile_name):
                 self.pagefile_offset = vaddr
                 vaddr += pagefile_as.end()
                 self.pagefile_end = vaddr

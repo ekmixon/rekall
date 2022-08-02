@@ -31,8 +31,9 @@ class EfilterMagics(magic.Magics):
 
     def _process_select(self, line, cell=None):
         session = self.shell.user_module.session
-        return self._RunPlugin(session, "search", "select " + line + (
-            cell or ""))
+        return self._RunPlugin(
+            session, "search", (f"select {line}" + ((cell or "")))
+        )
 
     @magic.line_cell_magic
     def pager(self, line, cell=None):

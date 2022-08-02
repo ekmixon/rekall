@@ -204,22 +204,22 @@ class GenericSQLiteCollection(CollectionSpec):
         """Ensures that the collection definition is valid."""
         for table in self.tables:
             if not self.valid_table_name_re.match(table.name):
-                raise RuntimeError("Invalid table name %s" % table.name)
+                raise RuntimeError(f"Invalid table name {table.name}")
 
             for column in table.columns:
                 if not self.valid_table_name_re.match(column.name):
-                    raise RuntimeError("Invalid column name %s" % column.name)
+                    raise RuntimeError(f"Invalid column name {column.name}")
 
                 # Default type is unicode.
                 if column.type is None:
                     column.type = "unicode"
 
                 if column.type not in self._allowed_types:
-                    raise RuntimeError("Invalid column type %s" % column.type)
+                    raise RuntimeError(f"Invalid column type {column.type}")
 
             for index in table.indexes:
                 if not self.valid_table_name_re.match(index):
-                    raise RuntimeError("Invalid column name %s" % index)
+                    raise RuntimeError(f"Invalid column name {index}")
 
     def load_from_local_file(self, filename):
         self._filename = filename
@@ -261,26 +261,30 @@ class GenericSQLiteCollection(CollectionSpec):
         # Now parse the schema and create the relevant DB table.
         for table in self.tables:
             column_specs = []
-            self._queries[table.name] = "insert into tbl_%s values (%s)" % (
-                table.name, ",".join("?" * len(table.columns)))
+            self._queries[
+                table.name
+            ] = f'insert into tbl_{table.name} values ({",".join("?" * len(table.columns))})'
+
 
             for column in table.columns:
-                if column.type == "int" or column.type == "epoch":
-                    column_specs.append(column.name + " BIG INTEGER")
+                if column.type in ["int", "epoch"]:
+                    column_specs.append(f"{column.name} BIG INTEGER")
                 elif column.type in [None, "unicode"]:
-                    column_specs.append(column.name + " TEXT")
+                    column_specs.append(f"{column.name} TEXT")
                 elif column.type == "str":
-                    column_specs.append(column.name + " BLOB")
+                    column_specs.append(f"{column.name} BLOB")
                 elif column.type == "float":
-                    column_specs.append(column.name + " REAL")
+                    column_specs.append(f"{column.name} REAL")
 
-            self._cursor.execute("CREATE TABLE IF NOT EXISTS tbl_%s (%s);" % (
-                table.name, ",".join(column_specs)))
+            self._cursor.execute(
+                f'CREATE TABLE IF NOT EXISTS tbl_{table.name} ({",".join(column_specs)});'
+            )
+
 
             for index in table.indexes:
                 self._cursor.execute(
-                    "create index if not exists idx_%s on tbl_%s (%s)" % (
-                        index, table.name, index))
+                    f"create index if not exists idx_{index} on tbl_{table.name} ({index})"
+                )
 
     @classmethod
     def transaction(cls, collection_location, callback, *args, **kwargs):
@@ -336,7 +340,7 @@ class GenericSQLiteCollection(CollectionSpec):
 
             return self.tables[0]
 
-        raise RuntimeError("Unknown table %s" % table)
+        raise RuntimeError(f"Unknown table {table}")
 
     def sanitize_row(self, row, table=None):
         """Convert the row into primitives.
@@ -380,9 +384,9 @@ class GenericSQLiteCollection(CollectionSpec):
         """
         table = self._find_table(table)
         kwargs = self.sanitize_row(kwargs)
-        update_sql = ",".join("%s=?" % x for x in kwargs)
-        update_sql = "update tbl_%s set %s" % (table.name, update_sql)
-        update_sql += " where " + " and ".join(["%s=?" % x for x in condition])
+        update_sql = ",".join(f"{x}=?" for x in kwargs)
+        update_sql = f"update tbl_{table.name} set {update_sql}"
+        update_sql += " where " + " and ".join([f"{x}=?" for x in condition])
 
         self._session.logging.debug(
             "Query (%s): %s", self.location.to_path(), update_sql)
@@ -399,8 +403,7 @@ class GenericSQLiteCollection(CollectionSpec):
 
     def table_count(self, table=None):
         table = self._find_table(table)
-        rows = self._cursor.execute(
-            "select count(*) as c from tbl_%s" % table.name)
+        rows = self._cursor.execute(f"select count(*) as c from tbl_{table.name}")
         for row in rows:
             return row["c"]
 
@@ -408,7 +411,7 @@ class GenericSQLiteCollection(CollectionSpec):
               limit=None, **kwargs):
         table = self._find_table(table)
         if query is None:
-            query = "select * from tbl_%s" % table.name
+            query = f"select * from tbl_{table.name}"
             if not kwargs:
                 kwargs["1"] = 1
 
@@ -419,27 +422,26 @@ class GenericSQLiteCollection(CollectionSpec):
                 if "?" in k:
                     conditions.append(k)
                 else:
-                    conditions.append("%s=?" % k)
+                    conditions.append(f"{k}=?")
 
             query += " where " + " and ".join(conditions)
             if order_by:
-                query += " order by " + order_by
+                query += f" order by {order_by}"
 
             if limit is not None:
-                query += " limit %s " % limit
+                query += f" limit {limit} "
 
         self._session.logging.debug("Query (%s): %s", self.location.to_path(),
                                     query)
-        for row in self._cursor.execute(query, query_args or ()):
-            yield row
+        yield from self._cursor.execute(query, query_args or ())
 
     def delete(self, table=None, **kwargs):
         table = self._find_table(table)
         if not kwargs:
             kwargs[1] = 1
 
-        query = "delete from tbl_%s where " % table.name
-        query += " and ".join(["%s=?" % x for x in kwargs])
+        query = f"delete from tbl_{table.name} where "
+        query += " and ".join([f"{x}=?" for x in kwargs])
 
         self._session.logging.debug("Query (%s): %s", self.location.to_path(),
                                     query)

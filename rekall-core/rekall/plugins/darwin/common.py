@@ -209,11 +209,9 @@ class DarwinFindKASLR(plugin.PhysicalASMixin, DarwinOnlyMixin,
         yield first_hit
 
         maxlen = self.session.GetParameter("autodetect_scan_length")
-        for hit in CatfishScanner(
-                address_space=self.session.physical_address_space,
-                session=self.session).scan(offset=first_hit + 1,
-                                           maxlen=maxlen):
-            yield hit
+        yield from CatfishScanner(
+            address_space=self.session.physical_address_space, session=self.session
+        ).scan(offset=first_hit + 1, maxlen=maxlen)
 
     def vm_kernel_slide_hits(self):
         """Tries to compute the KASLR slide.
@@ -284,7 +282,7 @@ class DarwinFindKASLR(plugin.PhysicalASMixin, DarwinOnlyMixin,
           True if vm_kernel_slide value appears sane. False otherwise.
         """
         version_string = self._lookup_version_string(vm_kernel_slide)
-        return version_string[0:13] == b"Darwin Kernel"
+        return version_string[:13] == b"Darwin Kernel"
 
     def render(self, renderer):
         renderer.table_header([
@@ -370,13 +368,13 @@ class DarwinFindDTB(DarwinKASLRMixin, DarwinOnlyMixin, core.FindDTB):
                 result = self.profile.get_constant_object(
                     "_IdlePDPT", "unsigned int")
 
-            yield result
         else:
             result = self.profile.get_constant("_IdlePML4", is_address=True)
             if result > 0xffffff8000000000:
                 result -= 0xffffff8000000000
 
-            yield result
+
+        yield result
 
     def _dtb_hits_kernel_pmap(self):
         """On 64-bit systems, finds the DTB from the kernel pmap struct.
@@ -409,13 +407,10 @@ class DarwinFindDTB(DarwinKASLRMixin, DarwinOnlyMixin, core.FindDTB):
 
     def dtb_hits(self):
         for method in self._dtb_methods():
-            for dtb_hit in method():
-                yield dtb_hit
+            yield from method()
 
     def VerifyHit(self, hit):
-        address_space = self.CreateAS(hit)
-
-        if address_space:
+        if address_space := self.CreateAS(hit):
             address = self.profile.get_constant(
                 "_version", is_address=True)
             if not address_space.is_valid_address(address):
@@ -457,11 +452,15 @@ class ProcessFilterMixin(object):
         """Return the names of available proc enumeration methods."""
         # Find all the producers that collect procs and inherit from
         # AbstractDarwinCachedProducer.
-        methods = []
-        for subclass in AbstractDarwinCachedProducer.classes.values():
-            if (issubclass(subclass, AbstractDarwinCachedProducer)
-                    and subclass.type_name == "proc"):
-                methods.append(subclass.name)
+        methods = [
+            subclass.name
+            for subclass in AbstractDarwinCachedProducer.classes.values()
+            if (
+                issubclass(subclass, AbstractDarwinCachedProducer)
+                and subclass.type_name == "proc"
+            )
+        ]
+
         methods.sort()
 
         return methods
@@ -478,8 +477,7 @@ class ProcessFilterMixin(object):
                        key=lambda proc: proc.pid)
 
         if not self.filtering_requested:
-            for proc in procs:
-                yield proc
+            yield from procs
         else:
             for offset in self.plugin_args.proc:
                 yield self.profile.proc(vm=self.kernel_address_space,

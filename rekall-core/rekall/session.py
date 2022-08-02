@@ -133,10 +133,7 @@ class PluginContainer(object):
         """
         # Try to see if the requested plugin is active right now.
         metadata = self.plugin_db.GetActivePlugin(name)
-        if metadata == None:
-            return metadata
-
-        return metadata.plugin_cls
+        return metadata if metadata is None else metadata.plugin_cls
 
     def Metadata(self, name):
         return self.plugin_db.GetActivePlugin(name)
@@ -153,7 +150,7 @@ class PluginContainer(object):
         pslist_plugin = plugins.pslist()
         """
         plugin_cls = self.GetPluginClass(name)
-        if plugin_cls == None:
+        if plugin_cls is None:
             return plugin_cls
 
         return obj.Curry(plugin_cls, session=self.session)
@@ -170,10 +167,7 @@ class PluginRunnerContainer(PluginContainer):
 
     def __getattr__(self, name):
         plugin_cls = self.GetPluginClass(name)
-        if plugin_cls == None:
-            return plugin_cls
-
-        return PluginRunner(self.session, name)
+        return plugin_cls if plugin_cls is None else PluginRunner(self.session, name)
 
 
 class Configuration(utils.AttributeDict):
@@ -325,8 +319,7 @@ class Configuration(utils.AttributeDict):
 
         We force load the profile and avoid autodetection.
         """
-        profile_obj = self.session.LoadProfile(profile)
-        if profile_obj:
+        if profile_obj := self.session.LoadProfile(profile):
             self.session.SetCache("profile_obj", profile_obj,
                                   volatile=False)
 
@@ -336,7 +329,7 @@ class Configuration(utils.AttributeDict):
         if isinstance(level, basestring):
             level = getattr(logging, level.upper(), logging.INFO)
 
-        if level == None:
+        if level is None:
             return
 
         self.session.logging.debug("Logging level set to %s", level)
@@ -380,7 +373,7 @@ class Configuration(utils.AttributeDict):
         return name
 
     def _set_session_id(self, session_id, __):
-        if self.Get("session_id") == None:
+        if self.Get("session_id") is None:
             return session_id
 
         # We are allowed to set a session id which is not already set.
@@ -391,13 +384,13 @@ class Configuration(utils.AttributeDict):
         return session_id
 
     def Set(self, attr, value):
-        hook = getattr(self, "_set_%s" % attr, None)
-        if hook:
+        if hook := getattr(self, f"_set_{attr}", None):
             # If there is a set hook we must use the context manager.
             if self._lock > 0:
                 raise ValueError(
-                    "Can only update attribute %s using the context manager." %
-                    attr)
+                    f"Can only update attribute {attr} using the context manager."
+                )
+
 
             if attr not in self._pending_hooks:
                 self._pending_hooks.append(attr)
@@ -431,7 +424,7 @@ class Configuration(utils.AttributeDict):
                 with self:
                     # Hooks can call Set() which might add more hooks.
                     for attr in hooks:
-                        hook = getattr(self, "_set_%s" % attr)
+                        hook = getattr(self, f"_set_{attr}")
                         value = self._pending_parameters[attr]
 
                         res = hook(value, self._pending_parameters)
@@ -452,9 +445,9 @@ class Configuration(utils.AttributeDict):
 
             value = u"\n  ".join(utils.SmartUnicode(v).splitlines())
             if len(value) > 100:
-                value = u"%s ..." % value[:100]
+                value = f"{value[:100]} ..."
 
-            result.append(u"  %s = %s" % (k, value))
+            result.append(f"  {k} = {value}")
 
         return u"{\n" + u"\n".join(sorted(result)) + u"\n}"
 
@@ -596,7 +589,7 @@ class Session(with_metaclass(registry.MetaclassRegistry, object)):
         if self.logger is not None:
             return self.logger
 
-        logger_name = u"rekall.%s" % self.session_id
+        logger_name = f"rekall.{self.session_id}"
         if self._logger is None or self._logger.name != logger_name:
             # Set up a logging object. All rekall logging must be done
             # through the session's logger.
@@ -713,7 +706,7 @@ class Session(with_metaclass(registry.MetaclassRegistry, object)):
 
         # Get the resolver from the cache.
         address_resolver = self.context_cache.get(current_context)
-        if address_resolver == None:
+        if address_resolver is None:
             # Make a new address resolver.
             address_resolver = self.plugins.address_resolver()
             self.context_cache[current_context] = address_resolver
@@ -798,8 +791,7 @@ class Session(with_metaclass(registry.MetaclassRegistry, object)):
                 if name in self._hook_locks:
                     # This should never happen! If it does then this will block
                     # in a loop so we fail hard.
-                    raise RecursiveHookException(
-                        "Trying to invoke hook %s recursively!" % name)
+                    raise RecursiveHookException(f"Trying to invoke hook {name} recursively!")
 
                 try:
                     self._hook_locks.add(name)
@@ -818,10 +810,7 @@ class Session(with_metaclass(registry.MetaclassRegistry, object)):
 
         So we can pass them as valid python parameters.
         """
-        result = {}
-        for k, v in kwargs.items():
-            result[k.replace("-", "_")] = v
-        return result
+        return {k.replace("-", "_"): v for k, v in kwargs.items()}
 
     def RunPlugin(self, plugin_obj, *args, **kwargs):
         """Launch a plugin and its render() method automatically.
@@ -849,8 +838,7 @@ class Session(with_metaclass(registry.MetaclassRegistry, object)):
         try:
             plugin_name = self._GetPluginName(plugin_obj)
         except Exception as e:
-            raise ValueError(
-                "Invalid plugin_obj parameter (%s)." % repr(plugin))
+            raise ValueError(f"Invalid plugin_obj parameter ({repr(plugin)}).")
 
         # On multiple calls to RunPlugin, we need to make sure the
         # HoardingLogHandler doesn't send messages to the wrong renderer.
@@ -865,8 +853,7 @@ class Session(with_metaclass(registry.MetaclassRegistry, object)):
                 original_plugin_obj = plugin_obj
                 plugin_obj = self._GetPluginObj(plugin_obj, *args, **kwargs)
                 if not plugin_obj:
-                    raise ValueError(
-                        "Invalid plugin: %s" % original_plugin_obj)
+                    raise ValueError(f"Invalid plugin: {original_plugin_obj}")
                 result = plugin_obj.render(ui_renderer) or plugin_obj
                 self.last = plugin_obj
             except (Exception, KeyboardInterrupt) as e:
@@ -948,14 +935,11 @@ class Session(with_metaclass(registry.MetaclassRegistry, object)):
 
         try:
             if use_cache:
-                cached_profile = self.profile_cache[name]
-                if cached_profile:
+                if cached_profile := self.profile_cache[name]:
                     return cached_profile
 
                 else:
-                    return obj.NoneObject(
-                        "Unable to load profile %s from any repository." %
-                        name)
+                    return obj.NoneObject(f"Unable to load profile {name} from any repository.")
 
         except KeyError:
             pass
@@ -967,7 +951,7 @@ class Session(with_metaclass(registry.MetaclassRegistry, object)):
                                                       version=None,
                                                       session=self)
             data = container.GetData(os.path.basename(name))
-            if data == None:
+            if data is None:
                 raise IOError("Not found.")
 
             result = obj.Profile.LoadProfileFromData(data, self, name=name)
@@ -1006,9 +990,8 @@ class Session(with_metaclass(registry.MetaclassRegistry, object)):
         # Cache it for later. Note that this also caches failures so we do not
         # retry again.
         self.profile_cache[name] = result
-        if result == None:
-            return obj.NoneObject(
-                "Unable to load profile %s from any repository." % name)
+        if result is None:
+            return obj.NoneObject(f"Unable to load profile {name} from any repository.")
 
         return result
 
@@ -1039,8 +1022,7 @@ class Session(with_metaclass(registry.MetaclassRegistry, object)):
 
     @utils.safe_property
     def physical_address_space(self):
-        res = self.GetParameter("physical_address_space", None)
-        return res
+        return self.GetParameter("physical_address_space", None)
 
     @physical_address_space.setter
     def physical_address_space(self, value):
@@ -1063,14 +1045,13 @@ class Session(with_metaclass(registry.MetaclassRegistry, object)):
         if process_context != None:
             return process_context
 
-        res = self.GetParameter("profile_obj")
-        return res
+        return self.GetParameter("profile_obj")
 
     @profile.setter
     def profile(self, value):
         # Clear the profile object. Next access to it will trigger profile
         # auto-detection.
-        if value == None:
+        if value is None:
             self.SetCache('profile_obj', value, volatile=False)
 
         elif isinstance(value, basestring):
@@ -1081,7 +1062,7 @@ class Session(with_metaclass(registry.MetaclassRegistry, object)):
             self.SetCache('profile_obj', value, volatile=False)
             self.SetCache("profile", value.name, volatile=False)
         else:
-            raise AttributeError("Type %s not allowed for profile" % value)
+            raise AttributeError(f"Type {value} not allowed for profile")
 
     def clone(self, **kwargs):
         new_state = self.state.copy()
@@ -1094,8 +1075,10 @@ class Session(with_metaclass(registry.MetaclassRegistry, object)):
         session_id = self._new_session_id()
         old_session_name = new_state.pop("session_name", None)
         new_session_name = kwargs.pop(
-            "session_name", kwargs.get(
-                "filename", "%s (%s)" % (old_session_name, session_id)))
+            "session_name",
+            kwargs.get("filename", f"{old_session_name} ({session_id})"),
+        )
+
         new_session = self.__class__(
             session_name=new_session_name, session_id=session_id, **new_state)
         new_session.Reset()
@@ -1277,11 +1260,14 @@ class InteractiveSession(Session):
         return self.GetParameter("session_id", default=Session.session_id)
 
     def find_session(self, session_id):
-        for session in self.session_list:
-            if session.session_id == session_id:
-                return session
-
-        return None
+        return next(
+            (
+                session
+                for session in self.session_list
+                if session.session_id == session_id
+            ),
+            None,
+        )
 
     def _new_session_id(self):
         new_sid = 1
@@ -1295,7 +1281,7 @@ class InteractiveSession(Session):
         """Handle all exceptions thrown by logging to the console."""
 
         if isinstance(e, plugin.InvalidArgs):
-            self.logging.fatal("Invalid Args: %s" % e)
+            self.logging.fatal(f"Invalid Args: {e}")
 
         elif isinstance(e, plugin.PluginError):
             self.logging.fatal(str(e))
@@ -1327,15 +1313,17 @@ class InteractiveSession(Session):
             self.printer(x)
 
     def __str__(self):
-        result = u"""Rekall Memory Forensics session Started on %s.
+        return (
+            u"""Rekall Memory Forensics session Started on %s.
 
 Config:
 %s
 
 Cache (%r):
 %s
-""" % (time.ctime(self._start_time), self.state, self.cache, self.cache)
-        return result
+"""
+            % (time.ctime(self._start_time), self.state, self.cache, self.cache)
+        )
 
     def __dir__(self):
         items = list(self.__dict__.keys()) + dir(self.__class__)
@@ -1351,8 +1339,7 @@ Cache (%r):
         session_id = kwargs["session_id"] = self._new_session_id()
         if "session_name" not in kwargs:
             # Make a unique session name.
-            kwargs["session_name"] = u"%s (%s)" % (
-                kwargs.get("filename", session_id), session_id)
+            kwargs["session_name"] = f'{kwargs.get("filename", session_id)} ({session_id})'
 
         new_session = self.__class__()
         new_session.locals = self.locals

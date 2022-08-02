@@ -105,7 +105,7 @@ class ArmPagedMemory(addrspace.PagedReader):
         # If the underlying address space already knows about the dtb we use it.
         self.dtb = dtb or self.session.GetParameter("dtb")
 
-        if not self.dtb != None:
+        if self.dtb is None:
             raise TypeError("No valid DTB specified. Try the find_dtb"
                             " plugin to search for the dtb.")
         self.name = (name or 'Kernel AS') + "@%#x" % self.dtb
@@ -242,8 +242,7 @@ class ArmPagedMemory(addrspace.PagedReader):
                          self.large_page_base_address_mask) | (
                              vaddr & self.large_page_index_mask))
 
-        # Small page translation. Figure 3-11.
-        elif l2_descriptor_type == 0b10 or l2_descriptor_type == 0b11:
+        elif l2_descriptor_type in [0b10, 0b11]:
             collection.add(
                 intel.CommentDescriptor, "Coarse table base @ {0:#x}\n",
                 l2_descriptor & self.small_page_base_address_mask)
@@ -253,18 +252,6 @@ class ArmPagedMemory(addrspace.PagedReader):
                 address=(l2_descriptor &
                          self.small_page_base_address_mask) | (
                              vaddr & self.small_page_index_mask))
-
-        # Tiny pages. Figure 3-12.
-        elif l2_descriptor_type == 0b11:
-            collection.add(
-                intel.CommentDescriptor, "Coarse table base @ {0:#x}\n",
-                l2_descriptor & self.tiny_page_base_address_mask)
-
-            collection.add(
-                intel.PhysicalAddressDescriptor,
-                address=(l2_descriptor &
-                         self.tiny_page_base_address_mask) | (
-                             vaddr & self.tiny_page_index_mask))
 
         elif l2_descriptor_type == 0b00:
             collection.add(intel.InvalidAddress, "Invalid L2 descriptor")
@@ -318,10 +305,9 @@ class ArmPagedMemory(addrspace.PagedReader):
 
             # Coarse page table contains a secondary fetch summing up to 1Mb.
             if l1_descriptor_type == 0b01:
-                for x in self._generate_coarse_page_table_addresses(
-                        vaddr, l1_descriptor &
-                        self.coarse_page_table_base_address_mask):
-                    yield x
+                yield from self._generate_coarse_page_table_addresses(
+                    vaddr, l1_descriptor & self.coarse_page_table_base_address_mask
+                )
 
                 vaddr += 1 << 20
                 continue
@@ -331,7 +317,7 @@ class ArmPagedMemory(addrspace.PagedReader):
     def _generate_coarse_page_table_addresses(self, base_vaddr,
                                               coarse_page_base):
         vaddr = base_vaddr
-        while vaddr < base_vaddr + (1 << 20):
+        while vaddr < vaddr + (1 << 20):
             l2_addr = (coarse_page_base |
                        (vaddr & self.l2_table_index_mask) >> 10)
 
@@ -350,7 +336,7 @@ class ArmPagedMemory(addrspace.PagedReader):
                 continue
 
             # 4kb small page.
-            if l2_descriptor_type == 0b10 or l2_descriptor_type == 0b11:
+            if l2_descriptor_type in [0b10, 0b11]:
                 yield addrspace.Run(
                     start=vaddr,
                     end=vaddr + (1 << 12),

@@ -46,10 +46,7 @@ class Interpolator(dict):
         self._config = session.GetParameter("agent_config_obj")
 
     def __getitem__(self, item):
-        if item in self:
-            return self.get(item)
-
-        return getattr(self, "get_" + item, None)()
+        return self.get(item) if item in self else getattr(self, f"get_{item}", None)()
 
     def get_client_id(self):
         return self._config.client.writeback.client_id

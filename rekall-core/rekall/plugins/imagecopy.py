@@ -100,8 +100,7 @@ class ImageCopy(plugin.PhysicalASMixin, plugin.Command):
                     fd.seek(offset)
                     fd.write(data)
 
-                    renderer.RenderProgress(
-                        "Writing offset %s" % self.human_readable(offset))
+                    renderer.RenderProgress(f"Writing offset {self.human_readable(offset)}")
 
 
 class TestImageCopy(testlib.HashChecker):

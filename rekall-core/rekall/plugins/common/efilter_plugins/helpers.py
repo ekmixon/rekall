@@ -20,7 +20,7 @@ from rekall_lib import utils
 # queries. For example select hex(cmd_address) from dis(0xfa8000895a32).
 def hex_function(value):
     """A Function to format the output as a hex string."""
-    if value == None:
+    if value is None:
         return
 
     if repeated.isrepeating(value):
@@ -29,13 +29,13 @@ def hex_function(value):
     return "%#x" % int(value)
 
 def str_function(value):
-    if value == None:
+    if value is None:
         return
 
     return utils.SmartUnicode(value)
 
 def int_function(value):
-    if value == None:
+    if value is None:
         return
 
     return int(value)
@@ -51,29 +51,23 @@ def substitute(pattern, repl, target):
         return
 
     if isinstance(target, (list, tuple)):
-        result = []
-        for item in target:
-            result.append(substitute(pattern, repl, item))
-
-        return result
+        return [substitute(pattern, repl, item) for item in target]
     else:
         return re.sub(pattern, repl, six.text_type(target), re.I)
 
 
 def re_filter(pattern, target):
     if isinstance(target, (list, tuple)):
-        result = []
-        for item in target:
-            if re_filter(pattern, item):
-                result.append(tmp)
-
+        result = [tmp for item in target if re_filter(pattern, item)]
         return result
 
     elif isinstance(target, dict):
-        result = {}
-        for item, value in target.items():
-            if re_filter(pattern, item):
-                result[item] = value
+        result = {
+            item: value
+            for item, value in target.items()
+            if re_filter(pattern, item)
+        }
+
         return result
 
     else:
@@ -84,10 +78,7 @@ def re_filter(pattern, target):
             pass
 
 def join(seperator, target):
-    if isinstance(target, (list, tuple)):
-        return seperator.join(target)
-
-    return target
+    return seperator.join(target) if isinstance(target, (list, tuple)) else target
 
 
 
@@ -158,12 +149,10 @@ class EfilterRunner(object):
     """
 
     def resolve(self, name):
-        function = EFILTER_SCOPES.get(name)
-        if function:
+        if function := EFILTER_SCOPES.get(name):
             return function
 
-        method = getattr(self, "run_" + name, None)
-        if method:
+        if method := getattr(self, f"run_{name}", None):
             return GeneratorRunner(method)
 
         raise KeyError("No plugin named %r." % name)
@@ -200,6 +189,6 @@ class ListFilter(EfilterRunner):
         self._list = data
         query = "select * from list()"
         if filter_exr:
-            query += "where " + filter_exr
+            query += f"where {filter_exr}"
 
         return super(ListFilter, self).filter(query, **query_args)

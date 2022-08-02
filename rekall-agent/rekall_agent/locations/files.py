@@ -59,10 +59,11 @@ class FileLocationImpl(location.FileLocation):
         expansion = self.expand_path(**kwargs)
         _, expansion = os.path.splitdrive(expansion)
         expansion = expansion.lstrip(os.path.sep)
-        if not expansion:
-            return self.path_prefix
-
-        return os.path.join(self.path_prefix, expansion)
+        return (
+            os.path.join(self.path_prefix, expansion)
+            if expansion
+            else self.path_prefix
+        )
 
     def _ensure_dir_exists(self, path):
         """Create intermediate directories to the ultimate path."""
@@ -91,7 +92,7 @@ class FileLocationImpl(location.FileLocation):
         path = self.to_path(**kwargs)
         self._ensure_dir_exists(path)
         try:
-            lock = filelock.FileLock(path + ".lock")
+            lock = filelock.FileLock(f"{path}.lock")
             with lock.acquire():
                 modification_cb(path, *args)
         except OSError:
@@ -106,11 +107,11 @@ class FileLocationImpl(location.FileLocation):
             with open(local_filename, "rb") as infd:
                 with open(path, "wb") as outfd:
                     while 1:
-                        data = infd.read(self.BUFFSIZE)
-                        if not data:
-                            break
+                        if data := infd.read(self.BUFFSIZE):
+                            outfd.write(data)
 
-                        outfd.write(data)
+                        else:
+                            break
 
             # Remove the local copy if the caller does not care about it any
             # more.
@@ -125,11 +126,11 @@ class FileLocationImpl(location.FileLocation):
 
         with open(path, "wb") as outfd:
             while 1:
-                data = infd.read(self.BUFFSIZE)
-                if not data:
-                    break
+                if data := infd.read(self.BUFFSIZE):
+                    outfd.write(data)
 
-                outfd.write(data)
+                else:
+                    break
 
         self._session.logging.warn("Uploaded %s", path)
 

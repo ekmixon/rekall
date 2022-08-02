@@ -55,7 +55,7 @@ class DarwinDMSG(common.AbstractDarwinCommand):
         size = min(msgbuf.msg_size, 0x400000)
         if 0 < msgbuf.msg_bufx < size:
             data = self.kernel_address_space.read(msgbuf.msg_bufc, size)
-            data = data[msgbuf.msg_bufx: size] + data[0:msgbuf.msg_bufx]
+            data = data[msgbuf.msg_bufx: size] + data[:msgbuf.msg_bufx]
             data = re.sub(b"\x00", b"", data)
 
             for x in data.splitlines():
@@ -239,15 +239,13 @@ class DarwinImageFingerprint(common.AbstractDarwinParameterHook):
         if self.session.physical_address_space.volatile:
             return obj.NoneObject("No fingerprint for volatile image.")
 
-        result = []
         profile = self.session.profile
         phys_as = self.session.physical_address_space
 
         address_space = self.session.GetParameter("default_address_space")
 
         label = profile.get_constant_object("_osversion", "String")
-        result.append((address_space.vtop(label.obj_offset), label.v()))
-
+        result = [(address_space.vtop(label.obj_offset), label.v())]
         label = profile.get_constant_object("_version", "String")
         result.append((address_space.vtop(label.obj_offset), label.v()))
 

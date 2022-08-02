@@ -55,8 +55,7 @@ class Lsof(common.LinProcessFilter):
         # The user space file descriptor is simply the offset into the fd
         # array.
         for i, file_ptr in enumerate(task.files.fds):
-            file_struct = file_ptr.deref()
-            if file_struct:
+            if file_struct := file_ptr.deref():
                 yield file_struct, i
 
     def lsof(self):

@@ -111,8 +111,7 @@ class YaraScanMixin(object):
         try:
             self.rules = yara.compile(source=rule)
         except Exception as e:
-            raise plugin.PluginError(
-                "Failed to compile yara expression: %s" % e)
+            raise plugin.PluginError(f"Failed to compile yara expression: {e}")
 
     def generate_hits(self, run):
         for buffer_as in scan.BufferASGenerator(

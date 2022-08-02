@@ -595,11 +595,13 @@ class MFT_ENTRY(obj.Struct):
 
     def is_directory(self):
         """Does this MFT entry behave as a directory?"""
-        for attribute in self.attributes:
-            if (attribute.type in ("$INDEX_ALLOCATION", "$INDEX_ROOT") and
-                    attribute.name == "$I30"):
-                return True
-        return False
+        return any(
+            (
+                attribute.type in ("$INDEX_ALLOCATION", "$INDEX_ROOT")
+                and attribute.name == "$I30"
+            )
+            for attribute in self.attributes
+        )
 
     def list_files(self):
         """List the files contained in this directory.
@@ -615,8 +617,7 @@ class MFT_ENTRY(obj.Struct):
             if (attribute.type in ("$INDEX_ALLOCATION", "$INDEX_ROOT") and
                     attribute.name == "$I30"):
                 for index_header in attribute.DecodeAttribute():
-                    for x in index_header.node.Entries():
-                        yield x
+                    yield from index_header.node.Entries()
 
     def open_file(self):
         """Returns an address space which maps the content of the file's data.
@@ -693,7 +694,7 @@ class MFT_ENTRY(obj.Struct):
 
             result.append(filename)
             mft_entry = mft[filename_record.mftReference]
-            if mft_entry == None:
+            if mft_entry is None:
                 break
 
             depth += 1
@@ -704,11 +705,14 @@ class MFT_ENTRY(obj.Struct):
     @utils.safe_property
     def data_size(self):
         """Search all the $DATA attributes for the allocated size."""
-        for attribute in self.attributes:
-            if attribute.type == "$DATA" and attribute.size > 0:
-                return attribute.size
-
-        return 0
+        return next(
+            (
+                attribute.size
+                for attribute in self.attributes
+                if attribute.type == "$DATA" and attribute.size > 0
+            ),
+            0,
+        )
 
 
 class NTFS_BOOT_SECTOR(obj.Struct):
@@ -788,16 +792,14 @@ class NTFS_ATTRIBUTE(obj.Struct):
                     self.obj_offset + self.content_offset,
                     self.content_size),
                 session=self.obj_session)
-        else:
-            run_list = list(self.RunList())
+        run_list = list(self.RunList())
 
-            # Create an address space.
-            address_space = RunListAddressSpace(
-                run_list=run_list,
-                base=self.obj_session.physical_address_space,
-                session=self.obj_session, size=self.size)
-
-            return address_space
+        return RunListAddressSpace(
+            run_list=run_list,
+            base=self.obj_session.physical_address_space,
+            session=self.obj_session,
+            size=self.size,
+        )
 
     def DecodeAttribute(self):
         if self.type == "$STANDARD_INFORMATION":
@@ -812,11 +814,12 @@ class NTFS_ATTRIBUTE(obj.Struct):
             return list(self.RunList())
 
         elif self.type == "$INDEX_ALLOCATION":
-            result = []
-            for i in range(0, self.size, 0x1000):
-                result.append(
-                    self.obj_profile.STANDARD_INDEX_HEADER(
-                        offset=i, vm=self.data, context=self.obj_context))
+            result = [
+                self.obj_profile.STANDARD_INDEX_HEADER(
+                    offset=i, vm=self.data, context=self.obj_context
+                )
+                for i in range(0, self.size, 0x1000)
+            ]
 
             return result
 
@@ -883,12 +886,7 @@ class NTFS_ATTRIBUTE(obj.Struct):
     @utils.safe_property
     def size(self):
         """The size of this attribute's data."""
-        if self.is_resident:
-            return self.content_size
-
-        # The first $DATA attribute will return the size of the entire file
-        # here.
-        return self.actual_size
+        return self.content_size if self.is_resident else self.actual_size
 
 
 class STANDARD_INDEX_HEADER(obj.Struct):
@@ -1006,7 +1004,7 @@ class NTFS(object):
                     return_path.append(filename)
                     break
             else:
-                raise IOError("Path %s component not found." % component)
+                raise IOError(f"Path {component} component not found.")
 
         directory.obj_context["path"] = "/".join(return_path)
 
@@ -1023,7 +1021,7 @@ class NTFSPlugins(plugin.PhysicalASMixin, plugin.TypedProfileCommand,
     def __init__(self, *args, **kwargs):
         super(NTFSPlugins, self).__init__(*args, **kwargs)
         self.ntfs = self.session.GetParameter("ntfs")
-        if self.ntfs == None:
+        if self.ntfs is None:
             self.ntfs = NTFS(self.session.physical_address_space,
                              session=self.session)
             self.session.SetCache("ntfs", self.ntfs, volatile=False)
@@ -1097,19 +1095,21 @@ class IStat(MFTPluginsMixin, NTFSPlugins):
 
                 renderer.format("\nClusters ({0:d}-{1:d}):\n",
                                 attribute.type, attribute.attribute_id)
-                renderer.table_header([
-                    ("c%s" % x, "c%s" % x, "25") for x in range(4)
-                ], suppress_headers=True, nowrap=True)
+                renderer.table_header(
+                    [(f"c{x}", f"c{x}", "25") for x in range(4)],
+                    suppress_headers=True,
+                    nowrap=True,
+                )
+
 
                 blocks = attribute.DecodeAttribute()
                 for i in range(0, len(blocks), 8):
                     ranges = []
                     for (start, length) in blocks[i:i+8]:
                         if start is None:
-                            ranges.append("Sparse(%s)" % length)
+                            ranges.append(f"Sparse({length})")
                         else:
-                            ranges.append("%s-%s(%s)" % (
-                                start, start + length, length))
+                            ranges.append(f"{start}-{start + length}({length})")
 
                     renderer.table_row(*ranges)
 
@@ -1118,8 +1118,7 @@ class IStat(MFTPluginsMixin, NTFSPlugins):
             return attribute.DecodeAttribute().name
 
         if attribute.type == "$DATA" and not attribute.is_resident:
-            return "VCN: %s-%s" % (attribute.runlist_vcn_start,
-                                   attribute.runlist_vcn_end)
+            return f"VCN: {attribute.runlist_vcn_start}-{attribute.runlist_vcn_end}"
 
         return ""
 
@@ -1271,21 +1270,22 @@ class IExport(core.DirectoryDumperMixin, IDump):
 
     def render(self, renderer):
         mft_entry = self.ntfs.mft[self.plugin_args.mft]
-        filename = mft_entry.full_path or ("MFT_%s" % self.plugin_args.mft)
+        filename = mft_entry.full_path or f"MFT_{self.plugin_args.mft}"
         attribute = mft_entry.get_attribute(self.plugin_args.type,
                                             self.plugin_args.id)
 
-        in_as = attribute.data
-        if in_as:
+        if in_as := attribute.data:
             renderer.format(
                 "Writing MFT Entry {0} as {1}\n",
                 self.plugin_args.mft, filename)
 
             with renderer.open(directory=self.dump_dir,
-                               filename=filename, mode="wb") as out_fd:
+                                       filename=filename, mode="wb") as out_fd:
                 utils.CopyAStoFD(
-                    in_as, out_fd, cb=lambda x, _: renderer.RenderProgress(
-                        "Wrote %s bytes" % x))
+                    in_as,
+                    out_fd,
+                    cb=lambda x, _: renderer.RenderProgress(f"Wrote {x} bytes"),
+                )
 
 
 class TestIExport(testlib.HashChecker):

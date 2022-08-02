@@ -41,10 +41,7 @@ class DarwinDumpCompressedPages(core.DirectoryDumperMixin, common.AbstractDarwin
     def UnpackCSize(self, c_slot):
 
         size = c_slot.c_size
-        if size == self.PAGE_SIZE - 1:
-            return self.PAGE_SIZE
-        else:
-            return size
+        return self.PAGE_SIZE if size == self.PAGE_SIZE - 1 else size
 
     def render(self, renderer):
 
@@ -81,11 +78,12 @@ class DarwinDumpCompressedPages(core.DirectoryDumperMixin, common.AbstractDarwin
             seg_buffer = c_buffer.obj_vm.read(c_buffer.v(),
                                               c_seg.c_nextoffset * 4)
 
-            c_slot_arrays = []
-            for slot in c_seg.c_slots:
-                c_slot_arrays.append(
-                    slot.dereference_as(
-                        target="Array", target_args=dict(target="c_slot")))
+            c_slot_arrays = [
+                slot.dereference_as(
+                    target="Array", target_args=dict(target="c_slot")
+                )
+                for slot in c_seg.c_slots
+            ]
 
             for slot_nr in range(c_seg.c_nextslot):
                 c_slot_array = c_slot_arrays[old_div(slot_nr, self.SLOT_ARRAY_SIZE)]
@@ -120,8 +118,7 @@ class DarwinDumpCompressedPages(core.DirectoryDumperMixin, common.AbstractDarwin
                     continue
 
                 try:
-                    decompressed = WKdm.WKdm_decompress_apple(data)
-                    if decompressed:
+                    if decompressed := WKdm.WKdm_decompress_apple(data):
                         dirname = os.path.join(self.dump_dir, "segment%d" % i)
                         try:
                             os.mkdir(dirname)

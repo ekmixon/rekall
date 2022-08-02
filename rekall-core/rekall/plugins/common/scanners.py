@@ -62,11 +62,9 @@ class BaseScannerPlugin(object):
 
     def scan_specification_requested(self):
         """Return True if the user requested any specific regions."""
-        for k, v in list(self.plugin_args.items()):
-            if k.startswith("scan_") and v:
-                return True
-
-        return False
+        return any(
+            k.startswith("scan_") and v for k, v in list(self.plugin_args.items())
+        )
 
     def generate_memory_ranges(self):
         """Parse the plugin args and generate memory ranges.
@@ -111,8 +109,7 @@ class BaseScannerPlugin(object):
                         if module.start > end:
                             break
 
-                        comment = "%s (%s), %s" % (
-                            task.name, task.pid, module.name)
+                        comment = f"{task.name} ({task.pid}), {module.name}"
 
                         self.session.logging.info(
                             "Scanning %s (%s) in: %s [%#x-%#x]",

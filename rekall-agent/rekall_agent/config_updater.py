@@ -95,12 +95,12 @@ class AgentServerInitialize(plugin.TypedProfileCommand, plugin.Command):
             self.ca_cert = crypto.X509Ceritifcate.from_primitive(open(
                 ca_cert_filename).read(), session=self.session)
 
-            yield dict(Message="Reusing existing CA keys in %s" %
-                       ca_cert_filename)
+            yield dict(Message=f"Reusing existing CA keys in {ca_cert_filename}")
         except IOError:
             yield dict(
-                Message="Generating new CA private key into %s and %s" % (
-                    ca_private_key_filename, ca_cert_filename))
+                Message=f"Generating new CA private key into {ca_private_key_filename} and {ca_cert_filename}"
+            )
+
             ca_private_key = crypto.RSAPrivateKey(
                 session=self.session).generate_key()
 
@@ -126,12 +126,15 @@ class AgentServerInitialize(plugin.TypedProfileCommand, plugin.Command):
             self.server_cert = crypto.X509Ceritifcate.from_primitive(open(
                 server_certificate_filename).read(), session=self.session)
 
-            yield dict(Message="Reusing existing server keys in %s" %
-                       server_certificate_filename)
+            yield dict(
+                Message=f"Reusing existing server keys in {server_certificate_filename}"
+            )
+
         except IOError:
             yield dict(
-                Message="Generating new Server private keys into %s and %s" % (
-                    server_private_key_filename, server_certificate_filename))
+                Message=f"Generating new Server private keys into {server_private_key_filename} and {server_certificate_filename}"
+            )
+
             self.server_private_key = crypto.RSAPrivateKey(
                 session=self.session).generate_key()
 
@@ -206,8 +209,9 @@ class AgentServerInitialize(plugin.TypedProfileCommand, plugin.Command):
 
         if os.access(server_config_filename, os.R_OK):
             yield dict(
-                Message="Server config at %s exists. Remove to regenerate." % (
-                    server_config_filename))
+                Message=f"Server config at {server_config_filename} exists. Remove to regenerate."
+            )
+
 
             # Load existing server config.
             server_config_data = open(server_config_filename, "rb").read()
@@ -221,8 +225,7 @@ class AgentServerInitialize(plugin.TypedProfileCommand, plugin.Command):
 
             self._build_config(config)
 
-            yield dict(Message="Writing server config file %s" %
-                       server_config_filename)
+            yield dict(Message=f"Writing server config file {server_config_filename}")
 
             with open(server_config_filename, "wb") as fd:
                 fd.write(yaml_utils.safe_dump(config.to_primitive()))
@@ -235,9 +238,7 @@ class AgentServerInitialize(plugin.TypedProfileCommand, plugin.Command):
         client_config_filename = os.path.join(
             self.config_dir, self.client_config_filename)
 
-        yield dict(
-            Message="Writing client config file %s" % (
-                client_config_filename))
+        yield dict(Message=f"Writing client config file {client_config_filename}")
 
         with open(client_config_filename, "wb") as fd:
             fd.write(self.client_config_warning +
@@ -248,7 +249,7 @@ class AgentServerInitialize(plugin.TypedProfileCommand, plugin.Command):
         self._config = self.session.GetParameter(
             "agent_config_obj", cached=False)
 
-        if self._config == None:
+        if self._config is None:
             raise RuntimeError("Unable to parse provided configuration.")
 
     def write_manifest(self):
@@ -269,15 +270,15 @@ class AgentServerInitialize(plugin.TypedProfileCommand, plugin.Command):
         """This should be an interactive script."""
         self.config_dir = self.plugin_args.config_dir
         if not os.access(self.config_dir, os.R_OK):
-            raise plugin.PluginError("Unable to write to config directory %s" %
-                                     self.config_dir)
+            raise plugin.PluginError(
+                f"Unable to write to config directory {self.config_dir}"
+            )
+
 
         for method in [self.generate_keys,
                        self.write_config,
                        self.write_manifest]:
-            for x in method():
-                yield x
-
+            yield from method()
         yield dict(Message="Done!")
 
 

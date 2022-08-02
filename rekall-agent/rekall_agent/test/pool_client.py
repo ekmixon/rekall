@@ -25,10 +25,11 @@ parser.add_argument('--verbose', action="store_true",
 def launch_client(_):
     flags, client_number = _
     config = yaml.safe_load(open(flags.config).read())
-    config["client"]["writeback_path"] = "%s/pool_writeback%s.yaml" % (
-        flags.state_dir, client_number)
-    config_file_name = "%s/pool_config%s.yaml" % (
-        flags.state_dir, client_number)
+    config["client"][
+        "writeback_path"
+    ] = f"{flags.state_dir}/pool_writeback{client_number}.yaml"
+
+    config_file_name = f"{flags.state_dir}/pool_config{client_number}.yaml"
 
     with open(config_file_name, "wb") as fd:
         fd.write(yaml_utils.safe_dump(config))

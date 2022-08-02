@@ -218,10 +218,9 @@ def GetConfigFile(session):
 
 def CreateDefaultConfigFile(session):
     """Creates a default config file."""
-    homedir = GetHomeDir(session)
-    if homedir:
+    if homedir := GetHomeDir(session):
         try:
-            filename = "%s/.rekallrc" % homedir
+            filename = f"{homedir}/.rekallrc"
             with open(filename, "wt") as fd:
                 fd.write(yaml_utils.safe_dump(DEFAULT_CONFIGURATION))
 

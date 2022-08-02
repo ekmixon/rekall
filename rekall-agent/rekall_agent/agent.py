@@ -162,10 +162,8 @@ class UnameImpl(client.Uname):
             version = platform.linux_distribution()[1]  # 12.04
 
         # Emulate PEP 425 naming conventions - e.g. cp27-cp27mu-linux_x86_64.
-        pep425tag = "%s%s-%s-%s" % (pep425tags.get_abbr_impl(),
-                                    pep425tags.get_impl_ver(),
-                                    str(pep425tags.get_abi_tag()).lower(),
-                                    pep425tags.get_platform())
+        pep425tag = f"{pep425tags.get_abbr_impl()}{pep425tags.get_impl_ver()}-{str(pep425tags.get_abi_tag()).lower()}-{pep425tags.get_platform()}"
+
 
         return cls.from_keywords(
             session=session,
@@ -456,9 +454,7 @@ class RekallAgent(common.AbstractAgentCommand):
         manifest = agent.Manifest.from_json(
             manifest_data, session=self.session)
 
-        # Did we crash last time? If so, send the old flow a crash ticket.
-        current_flow = self.writeback.current_flow
-        if current_flow:
+        if current_flow := self.writeback.current_flow:
             self.session.logging.debug("Reporting crash for %s",
                                        current_flow.flow_id)
 

@@ -161,13 +161,13 @@ class ClientPolicyImpl(ExternalFileMixin,
 
     @property
     def writeback(self):
-        if self._writeback == None:
+        if self._writeback is None:
             self._writeback = self.get_writeback()
 
         return self._writeback
 
     def get_writeback(self):
-        if self._writeback == None and self.writeback_path:
+        if self._writeback is None and self.writeback_path:
             try:
                 self._session.logging.debug(
                     "Will load writeback from %s", self.writeback_path)

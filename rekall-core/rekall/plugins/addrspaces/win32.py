@@ -73,9 +73,7 @@ class Win32FileWrapper(object):
         # a bug in its write routine, so we ignore it here. If the operation was
         # successful we assume all bytes were written.
         err, _bytes_written = win32file.WriteFile(self.fhandle, data)
-        if err == 0:
-            return len(data)
-        return 0
+        return len(data) if err == 0 else 0
 
     def end(self):
         return self.size
@@ -113,7 +111,7 @@ class Win32AddressSpace(addrspace.CachingAddressSpaceMixIn,
             return fhandle
 
         except pywintypes.error as e:
-            raise IOError("Unable to open %s: %s" % (path, e))
+            raise IOError(f"Unable to open {path}: {e}")
 
     def close(self):
         for run in self.get_mappings():
@@ -128,7 +126,7 @@ class Win32FileAddressSpace(Win32AddressSpace):
     __image = True
 
     def __init__(self, base=None, filename=None, **kwargs):
-        self.as_assert(base == None, 'Must be first Address Space')
+        self.as_assert(base is None, 'Must be first Address Space')
         super(Win32FileAddressSpace, self).__init__(**kwargs)
 
         path = filename or self.session.GetParameter("filename")
@@ -169,7 +167,7 @@ class WinPmemAddressSpace(Win32AddressSpace):
     __can_map_files = True
 
     def __init__(self, base=None, filename=None, session=None, **kwargs):
-        self.as_assert(base == None, 'Must be first Address Space')
+        self.as_assert(base is None, 'Must be first Address Space')
         path = filename or session.GetParameter("filename")
         self.as_assert(path.startswith("\\\\"),
                        "Filename does not look like a device.")
@@ -212,7 +210,7 @@ class WinPmemAddressSpace(Win32AddressSpace):
             return fhandle
 
         except pywintypes.error as e:
-            raise IOError("Unable to open %s: %s" % (path, e))
+            raise IOError(f"Unable to open {path}: {e}")
 
     FIELDS = (["CR3", "NtBuildNumber", "KernBase", "KDBG"] +
               ["KPCR%02d" % i for i in range(32)] +

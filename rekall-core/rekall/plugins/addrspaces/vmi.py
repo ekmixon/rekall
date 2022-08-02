@@ -35,8 +35,7 @@ class VMIAddressSpace(addrspace.BaseAddressSpace):
         domain = vmi_url.path[1:]
         # hypervisor specified ?
         self.mode = None
-        hypervisor = vmi_url.netloc
-        if hypervisor:
+        if hypervisor := vmi_url.netloc:
             self.mode = VMIMode[hypervisor.upper()]
         # query parameters ?
         self.volatile = True
@@ -69,14 +68,10 @@ class VMIAddressSpace(addrspace.BaseAddressSpace):
 
     def write(self, addr, data):
         bytes_written = self.vmi.write_pa(addr, data)
-        if bytes_written != len(data):
-            return False
-        return True
+        return bytes_written == len(data)
 
     def is_valid_address(self, addr):
-        if addr is None:
-            return False
-        return self.min_addr <= addr <= self.max_addr
+        return False if addr is None else self.min_addr <= addr <= self.max_addr
 
     def get_available_addresses(self):
         yield (self.min_addr, self.max_addr)

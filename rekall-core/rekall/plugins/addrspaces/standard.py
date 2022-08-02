@@ -50,7 +50,7 @@ class FDAddressSpace(addrspace.BaseAddressSpace):
     order = 0
 
     def __init__(self, base=None, fhandle=None, **kwargs):
-        self.as_assert(base == None, "Base passed to FDAddressSpace.")
+        self.as_assert(base is None, "Base passed to FDAddressSpace.")
         self.as_assert(fhandle is not None, 'file handle must be provided')
 
         self.fhandle = fhandle
@@ -88,13 +88,10 @@ class FDAddressSpace(addrspace.BaseAddressSpace):
 
     def get_mappings(self, start=0, end=2**64):
         _ = end
-        yield addrspace.Run(start=0, end=self.fsize,
-                            file_offset=0, address_space=self)
+        yield addrspace.Run(start=0, _=self.fsize, file_offset=0, address_space=self)
 
     def is_valid_address(self, addr):
-        if addr == None:
-            return False
-        return True
+        return addr is not None
 
     def close(self):
         self.fhandle.close()
@@ -126,7 +123,7 @@ class FileAddressSpace(FDAddressSpace):
     __image = True
 
     def __init__(self, base=None, filename=None, session=None, **kwargs):
-        self.as_assert(base == None, 'Must be first Address Space')
+        self.as_assert(base is None, 'Must be first Address Space')
 
         self.session = session
         path = filename or (session and session.GetParameter("filename"))
@@ -145,7 +142,7 @@ class FileAddressSpace(FDAddressSpace):
         try:
             fhandle = open(self.fname, self.mode)
         except (IOError, OSError) as e:
-            raise addrspace.ASAssertionError("%s" % e)
+            raise addrspace.ASAssertionError(f"{e}")
 
         self._closer = weakref.ref(self, lambda x: fhandle.close())
 

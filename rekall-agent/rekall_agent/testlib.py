@@ -51,7 +51,7 @@ class ClientAcionTest(testlib.RekallBaseUnitTestCase):
         cursor = conn.cursor()
         cursor.row_factory = sqlite3.Row
 
-        return list(cursor.execute("select * from tbl_%s" % table))
+        return list(cursor.execute(f"select * from tbl_{table}"))
 
 
 

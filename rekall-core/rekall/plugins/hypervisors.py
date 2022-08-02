@@ -119,22 +119,16 @@ class VMCSCheck(scan.ScannerCheck):
             return False
 
         try:
-            vmcs_obj = self.profile.Object("%s_VMCS" % platform,
-                                           offset=offset,
-                                           vm=buffer_as)
+            vmcs_obj = self.profile.Object(f"{platform}_VMCS", offset=offset, vm=buffer_as)
         except (AttributeError, TypeError):
             return False
 
         # CHECK 2: Verify that the VMCS has the VMX flag enabled.
-        if not vmcs_obj.HOST_CR4 & 0x2000:
-            return False
-
-        # CHECK 3: Verify that VMCS_LINK_POINTER is
-        # 0xFFFFFFFFFFFFFFFF.
-        if vmcs_obj.VMCS_LINK_PTR_FULL != 0xFFFFFFFFFFFFFFFF:
-            return False
-
-        return True
+        return (
+            vmcs_obj.VMCS_LINK_PTR_FULL == 0xFFFFFFFFFFFFFFFF
+            if vmcs_obj.HOST_CR4 & 0x2000
+            else False
+        )
 
 
 class VMCSScanner(scan.BaseScanner):
@@ -159,11 +153,11 @@ class VMCSScanner(scan.BaseScanner):
             (revision_id,) = struct.unpack("<I",
                                            self.address_space.read(offset, 4))
             revision_id = revision_id & 0x7FFFFFFF
-            vmcs_obj = self.profile.Object(
-                "%s_VMCS" % KNOWN_REVISION_IDS.get(revision_id),
-                offset=offset, vm=self.address_space)
-
-            yield vmcs_obj
+            yield self.profile.Object(
+                f"{KNOWN_REVISION_IDS.get(revision_id)}_VMCS",
+                offset=offset,
+                vm=self.address_space,
+            )
 
 
     def skip(self, buffer_as, offset):
@@ -187,15 +181,13 @@ class VirtualMachine(object):
         self.vmcss = set()
         # Dictionary where the key is a VMCS object and the value
         # represents whether the VMCS is valid, or not.
-        self.vmcs_validation = dict()
+        self.vmcs_validation = {}
         self.virtual_machines = set()
 
     @utils.safe_property
     def is_valid(self):
         """A VM is valid if at least one of its VMCS is valid."""
-        if any([self.vmcs_validation.get(vmcs, False) for vmcs in self.vmcss]):
-            return True
-        return False
+        return any(self.vmcs_validation.get(vmcs, False) for vmcs in self.vmcss)
 
     @utils.safe_property
     def is_nested(self):
@@ -217,29 +209,30 @@ class VirtualMachine(object):
         """The number of virtual cores of this VM."""
         valid_vmcss = list(filter(self.is_valid_vmcs, self.vmcss))
         # Count only unique VPIDs if the hypervisor uses them.
-        uniq_vpids = set([v.VPID for v in valid_vmcss])
-        if len(uniq_vpids) != 1:
-            return len(uniq_vpids)
-        else:
-            return len(valid_vmcss)
+        uniq_vpids = {v.VPID for v in valid_vmcss}
+        return len(uniq_vpids) if len(uniq_vpids) != 1 else len(valid_vmcss)
 
     @utils.safe_property
     def host_arch(self):
         """The architecture of the host that started this VM."""
-        all_host_as = set([self.get_vmcs_host_as_type(v) for v in self.vmcss
-                           if self.is_valid_vmcs(v)])
-        if len(all_host_as) == 1:
-            return all_host_as.pop()
-        return "???"
+        all_host_as = {
+            self.get_vmcs_host_as_type(v)
+            for v in self.vmcss
+            if self.is_valid_vmcs(v)
+        }
+
+        return all_host_as.pop() if len(all_host_as) == 1 else "???"
 
     @utils.safe_property
     def guest_arch(self):
         """The architecture of the guest OS of the VM."""
-        all_guest_as = set([self.get_vmcs_guest_as_type(v) for v in self.vmcss
-                            if self.is_valid_vmcs(v)])
-        if len(all_guest_as) == 1:
-            return all_guest_as.pop()
-        return "???"
+        all_guest_as = {
+            self.get_vmcs_guest_as_type(v)
+            for v in self.vmcss
+            if self.is_valid_vmcs(v)
+        }
+
+        return all_guest_as.pop() if len(all_guest_as) == 1 else "???"
 
     @utils.safe_property
     def ept_list(self):
@@ -280,12 +273,9 @@ class VirtualMachine(object):
         elif not vmcs.ENTRY_CONTROLS & (1 << 9):  # long mode bit
             # PAE and no long mode = 32bit PAE
             return "I386+PAE"
-        elif vmcs.ENTRY_CONTROLS & (1 << 9):  # long mode bit
+        else:
             # Long mode AND PAE = IA-32e
             return "AMD64"
-        else:
-            # We don't have an address space for other paging modes
-            return None
 
     @classmethod
     def get_vmcs_host_as_type(cls, vmcs):
@@ -299,12 +289,9 @@ class VirtualMachine(object):
         elif not vmcs.EXIT_CONTROLS & (1 << 9):  # long mode bit
             # PAE and no long mode = 32bit PAE
             return "I386+PAE"
-        elif vmcs.EXIT_CONTROLS & (1 << 9):  # long mode bit
+        else:
             # Long mode AND PAE = IA-32e
             return "AMD64"
-        else:
-            # We don't have an address space for other paging modes
-            return None
 
     @classmethod
     def get_vmcs_host_address_space(cls, vmcs, base_as=None):
@@ -333,16 +320,15 @@ class VirtualMachine(object):
 
         if not cr4 & (1 << 5):  # PAE bit
             # No PAE
-            address_space = intel.IA32PagedMemory(dtb=cr3, base=base_as)
+            return intel.IA32PagedMemory(dtb=cr3, base=base_as)
 
         elif not controls & (1 << 9):  # long mode bit
             # PAE and no long mode = 32bit PAE
-            address_space = intel.IA32PagedMemoryPae(dtb=cr3, base=base_as)
+            return intel.IA32PagedMemoryPae(dtb=cr3, base=base_as)
 
-        elif controls & (1 << 9):  # long mode bit
+        else:
             # Long mode AND PAE = IA-32e
-            address_space = amd64.AMD64PagedMemory(dtb=cr3, base=base_as)
-        return address_space
+            return amd64.AMD64PagedMemory(dtb=cr3, base=base_as)
 
     def add_vmcs(self, vmcs, validate=True):
         """Add a VMCS to this virtual machine.
@@ -350,10 +336,10 @@ class VirtualMachine(object):
         Raises:
           UnrelatedVmcsError if the VMCS doesn't match the VM's HOST_RIP or EPT.
         """
-        if self.host_rip == None:
+        if self.host_rip is None:
             self.host_rip = int(vmcs.HOST_RIP)
 
-        if self.ept == None:
+        if self.ept is None:
             self.ept = int(vmcs.m("EPT_POINTER_FULL"))
 
         if self.host_rip != vmcs.HOST_RIP:
@@ -481,8 +467,11 @@ class VirtualMachine(object):
 
                     # This step makes sure the VMCS is mapped in the
                     # Level1 guest physical memory (us).
-                    if (run.file_offset <= vmcs.obj_offset and
-                            vmcs.obj_offset < run.file_offset + run.length):
+                    if (
+                        run.file_offset
+                        <= vmcs.obj_offset
+                        < run.file_offset + run.length
+                    ):
                         # Now we need to validate the VMCS under our context.
                         # For this we need to fix the VMCS AS and its offset.
                         vm.set_parent(self)
@@ -629,9 +618,8 @@ class VmScan(plugin.PhysicalASMixin,
                                 vmcs,
                                 validate=not self.plugin_args.no_validate)
 
-                        if vm.is_valid_vmcs(vmcs):
-                            if self.plugin_args.quick:
-                                break
+                        if vm.is_valid_vmcs(vmcs) and self.plugin_args.quick:
+                            break
                     except UnrelatedVmcsError:
                         # This may happen when we analyze live memory. When
                         # the HOST_RIP/EPT that we grouped with has changed
@@ -649,7 +637,7 @@ class VmScan(plugin.PhysicalASMixin,
                 # potentially nested VMs aren't technically nested yet
                 # (i.e: don't have a parent). So we resort to checking if
                 # all the VMCSs are of nested-type.
-                may_be_nested = all([v.IS_NESTED for v in vm.vmcss])
+                may_be_nested = all(v.IS_NESTED for v in vm.vmcss)
                 if may_be_nested and not vm.is_valid:
                     # Only add as nested VMs ones that haven't been validated
                     # yet. This covers the case there image_is_guest is True
@@ -668,10 +656,11 @@ class VmScan(plugin.PhysicalASMixin,
         # https://www.usenix.org/event/osdi10/tech/full_papers/Ben-Yehuda.pdf
         #
         # These should show up as another valid VM.
-        if not self.plugin_args.no_validate:
-            candidate_hosts = [vm for vm in host_vms if vm.is_valid]
-        else:
-            candidate_hosts = []
+        candidate_hosts = (
+            []
+            if self.plugin_args.no_validate
+            else [vm for vm in host_vms if vm.is_valid]
+        )
 
         # This step validates nested VMs. We try all candidate nested vms
         # against all candidate hosts.

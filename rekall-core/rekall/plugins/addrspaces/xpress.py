@@ -113,7 +113,7 @@ def xpress_decode(inputBuffer):
                             length = unpack("<H", inputBuffer[inputIndex:inputIndex + 2])[0]
                         except StructError:
                             return recombine(outputBuffer)
-                        inputIndex = inputIndex + 2
+                        inputIndex += 2
                         length = length - (15 + 7)
                     length = length + 15
                 length = length + 7

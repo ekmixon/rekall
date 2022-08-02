@@ -134,15 +134,12 @@ class CleanCommand(Command):
 
     def run(self):
         if os.getcwd() != self.cwd:
-            raise RuntimeError('Must be in package root: %s' % self.cwd)
+            raise RuntimeError(f'Must be in package root: {self.cwd}')
 
         os.system('rm -rf ./build ./dist')
 
 
-commands = {}
-commands["pip_upgrade"] = PIPUpgrade
-commands["clean"] = CleanCommand
-
+commands = {"pip_upgrade": PIPUpgrade, "clean": CleanCommand}
 setup(
     name="rekall-core",
     version=VERSION["pep440"],

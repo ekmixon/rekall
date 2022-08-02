@@ -55,16 +55,16 @@ DISPLACEMENT_TABLE = array.array(
 COMPRESSED_MASK = 1 << 15
 SIGNATURE_MASK = 3 << 12
 SIZE_MASK = (1 << 12) - 1
-TAG_MASKS = [(1 << i) for i in range(0, 8)]
+TAG_MASKS = [1 << i for i in range(8)]
 
 
 def decompress_data(cdata, logger=None):
     """Decompresses the data."""
 
-    if not logger:
-        lznt1_logger = logging.getLogger("ntfs.lznt1")
-    else:
-        lznt1_logger = logger.getChild("lznt1")
+    lznt1_logger = (
+        logger.getChild("lznt1") if logger else logging.getLogger("ntfs.lznt1")
+    )
+
     # Change to DEBUG to turn on module level debugging.
     lznt1_logger.setLevel(logging.ERROR)
     in_fd = io.BytesIO(cdata)
@@ -116,18 +116,14 @@ def decompress_data(cdata, logger=None):
                             output_fd.tell(), symbol_length, symbol_offset,
                             pointer)
 
-                        output_fd.write(data)
-
                     else:
                         data = in_fd.read(1)
                         lznt1_logger.debug("Symbol %#x", ord(data))
-                        output_fd.write(data)
+                    output_fd.write(data)
 
         else:
             # Block is not compressed
             data = in_fd.read(size + 1)
             output_fd.write(data)
 
-    result = output_fd.getvalue()
-
-    return result
+    return output_fd.getvalue()

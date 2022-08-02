@@ -53,8 +53,7 @@ class Ifconfig(common.LinuxPlugin):
         net_device = self.profile.get_constant_object(
             "dev_base", target="net_device", vm=self.kernel_address_space)
 
-        for net_dev in net_device.walk_list("next"):
-            yield net_dev
+        yield from net_device.walk_list("next")
 
     def gather_net_dev_info(self, net_dev):
         mac_addr = net_dev.mac_addr
@@ -67,9 +66,7 @@ class Ifconfig(common.LinuxPlugin):
             vm=self.kernel_address_space)
 
         for net in nethead.list_of_type("net", "list"):
-            for net_dev in net.dev_base_head.list_of_type("net_device",
-                                                          "dev_list"):
-                yield net_dev
+            yield from net.dev_base_head.list_of_type("net_device", "dev_list")
 
     def collect(self):
         for net_dev in self.enumerate_devices():

@@ -70,13 +70,10 @@ class MmapFileAddressSpace(addrspace.BaseAddressSpace):
             self.map = mmap.mmap(self.fhandle.fileno(), self.fsize,
                                  access=mmap.ACCESS_READ)
         except Exception as e:
-            raise addrspace.ASAssertionError("Unable to mmap: %s" % e)
+            raise addrspace.ASAssertionError(f"Unable to mmap: {e}")
 
     def read(self, addr, length):
-        result = ""
-        if addr != None:
-            result = self.map[addr:addr + length]
-
+        result = self.map[addr:addr + length] if addr != None else ""
         return result + addrspace.ZEROER.GetZeros(length - len(result))
 
     def get_mappings(self, start=0, end=2**64):
@@ -85,9 +82,7 @@ class MmapFileAddressSpace(addrspace.BaseAddressSpace):
                             address_space=self.base)
 
     def is_valid_address(self, addr):
-        if addr == None:
-            return False
-        return addr < self.fsize - 1
+        return False if addr is None else addr < self.fsize - 1
 
     def close(self):
         self.map.close()

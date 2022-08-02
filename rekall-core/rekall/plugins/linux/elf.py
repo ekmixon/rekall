@@ -26,7 +26,7 @@ class ELFPlugins(plugin.TypedProfileCommand,
         else:
             address_space = self.session.GetParameter("default_address_space")
 
-        if address_space == None:
+        if address_space is None:
             address_space = self.session.GetParameter("physical_address_space")
 
         return elf.ELFProfile(session=self.session).elf64_hdr(
@@ -105,7 +105,7 @@ class ELFVerSymbols(ELFPlugins):
         for i, other_ref in enumerate(versyms.get_section()):
             symbol_record = dynamic_symbol_table[i]
 
-            if other_ref == 1 or other_ref == 0:
+            if other_ref in [1, 0]:
                 continue
 
             # The symbol record is versioned.

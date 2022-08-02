@@ -129,8 +129,7 @@ class RekallBaseUnitTestCase(with_metaclass(registry.MetaclassRegistry, unittest
         if cls.PLUGIN:
             return cls.PLUGIN
 
-        name = cls.PARAMETERS.get("commandline", "").split()
-        if name:
+        if name := cls.PARAMETERS.get("commandline", "").split():
             return name[0]
 
     def __init__(self, method_name="__init__", baseline=None, current=None,
@@ -167,9 +166,8 @@ class RekallBaseUnitTestCase(with_metaclass(registry.MetaclassRegistry, unittest
           rekall over the test case.
         """
         config_options = config_options.copy()
-        tmp_filename = os.path.join(self.temp_directory,
-                                    "." + self.__class__.__name__)
-        error_filename = tmp_filename + ".stderr"
+        tmp_filename = os.path.join(self.temp_directory, f".{self.__class__.__name__}")
+        error_filename = f"{tmp_filename}.stderr"
 
         baseline_commandline = config_options.get("commandline")
         config_options["tempdir"] = self.temp_directory
@@ -188,14 +186,13 @@ class RekallBaseUnitTestCase(with_metaclass(registry.MetaclassRegistry, unittest
             return {}
 
         if baseline_commandline:
-            baseline_commandline = "- %s" % baseline_commandline
+            baseline_commandline = f"- {baseline_commandline}"
             for k, v in list(config_options.items()):
                 # prepend all global options to the command line.
                 if k.startswith("-"):
                     # This is a boolean flag.
                     if v is True:
-                        baseline_commandline = "%s %s" % (
-                            k, baseline_commandline)
+                        baseline_commandline = f"{k} {baseline_commandline}"
 
                     elif isinstance(v, list):
                         baseline_commandline = "%s %s %s" % (
@@ -239,12 +236,13 @@ class RekallBaseUnitTestCase(with_metaclass(registry.MetaclassRegistry, unittest
 
             output = open(tmp_filename).read(10 * 1024 * 1024)
             error = open(error_filename).read(10 * 1024 * 1024)
-            baseline_data = dict(output=output.splitlines(),
-                                 logging=error.splitlines(),
-                                 return_code=pipe.returncode,
-                                 executed_command=cmdline)
+            return dict(
+                output=output.splitlines(),
+                logging=error.splitlines(),
+                return_code=pipe.returncode,
+                executed_command=cmdline,
+            )
 
-            return baseline_data
 
         else:
             # No valid command line - this baseline is aborted.
@@ -277,7 +275,7 @@ class RekallBaseUnitTestCase(with_metaclass(registry.MetaclassRegistry, unittest
             self.assertEqual(x, y)
 
     def __str__(self):
-        return u"%s %s" % (self.__class__.__name__, self._testMethodName)
+        return f"{self.__class__.__name__} {self._testMethodName}"
 
     def run(self, result=None):
         if result is None:
@@ -347,19 +345,17 @@ class SimpleTestCase(plugin.ModeBasedActiveMixin,
         if not super(SimpleTestCase, cls).is_active(session):
             return False
 
-        delegate_plugin = (
-            plugin.Command.ImplementationByClass(cls.PLUGIN) or
-            getattr(session.plugins, cls.CommandName() or "", None))
-
-        if delegate_plugin:
+        if delegate_plugin := (
+            plugin.Command.ImplementationByClass(cls.PLUGIN)
+            or getattr(session.plugins, cls.CommandName() or "", None)
+        ):
             return delegate_plugin.is_active(session)
 
     def testCase(self):
         previous = [x.strip() for x in self.baseline['output']]
         current = [x.strip() for x in self.current['output']]
 
-        difference = list(difflib.unified_diff(previous, current))
-        if difference:
+        if difference := list(difflib.unified_diff(previous, current)):
             self.failure_info = difference
 
         # Compare the entire table
@@ -377,7 +373,7 @@ class InlineTest(SimpleTestCase):
             fd.write("tempdir = %r\n" % self.temp_directory)
             fd.write(self.script)
 
-        config_options["commandline"] = "run --run %s" % tmp_script
+        config_options["commandline"] = f"run --run {tmp_script}"
         config_options["script"] = self.script.splitlines()
         return super(InlineTest, self).LaunchExecutable(config_options)
 
@@ -418,14 +414,14 @@ class HashChecker(SimpleTestCase):
         for filename in os.listdir(self.temp_directory):
             if not filename.startswith("."):
                 with open(os.path.join(self.temp_directory, filename),
-                          "rb") as fd:
+                                      "rb") as fd:
                     md5 = hashlib.md5()
                     while 1:
-                        data = fd.read(1024 * 1024)
-                        if not data:
-                            break
+                        if data := fd.read(1024 * 1024):
+                            md5.update(data)
 
-                        md5.update(data)
+                        else:
+                            break
 
                     baseline['hashes'][filename] = md5.hexdigest()
 

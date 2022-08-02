@@ -38,7 +38,7 @@ class ParameterHook(with_metaclass(registry.MetaclassRegistry, plugin.ModeBasedA
     volatile = True
 
     def __init__(self, session):
-        if session == None:
+        if session is None:
             raise RuntimeError("Session must be set")
 
         self.session = session

@@ -90,9 +90,10 @@ class HTTPServerPolicy(agent.ServerPolicy):
         if queue:
             return http_location.HTTPLocation.New(
                 session=self._session,
-                path_prefix="labels/%s/jobs/%s" % (
-                    queue, self._config.client.secret),
-                public=True)
+                path_prefix=f"labels/{queue}/jobs/{self._config.client.secret}",
+                public=True,
+            )
+
 
         # The client's jobs queue itself is publicly readable since the client
         # itself has no credentials.
@@ -110,12 +111,13 @@ class HTTPServerPolicy(agent.ServerPolicy):
     def flow_db_for_server(self, client_id=None, queue=None):
         if queue:
             return http_location.HTTPLocation.New(
-                session=self._session,
-                path_prefix="hunts/%s/flows.sqlite" % queue)
+                session=self._session, path_prefix=f"hunts/{queue}/flows.sqlite"
+            )
+
 
         return http_location.HTTPLocation.New(
-            session=self._session,
-            path_prefix=client_id + "/flows.sqlite")
+            session=self._session, path_prefix=f"{client_id}/flows.sqlite"
+        )
 
     def manifest_for_server(self):
         return http_location.HTTPLocation.New(
@@ -141,19 +143,19 @@ class HTTPServerPolicy(agent.ServerPolicy):
 
     def hunt_db_for_server(self, hunt_id):
         return http_location.HTTPLocation.New(
-            session=self._session,
-            path_prefix="hunts/%s/stats.sqlite" % hunt_id)
+            session=self._session, path_prefix=f"hunts/{hunt_id}/stats.sqlite"
+        )
 
     def hunt_result_collection_for_server(self, hunt_id, type):
         return http_location.HTTPLocation.New(
-            session=self._session,
-            path_prefix="hunts/%s/%s" % (hunt_id, type))
+            session=self._session, path_prefix=f"hunts/{hunt_id}/{type}"
+        )
 
     def client_record_for_server(self, client_id):
         """The client specific information."""
         return http_location.HTTPLocation.New(
-            session=self._session,
-            path_prefix="%s/client.metadata" % client_id)
+            session=self._session, path_prefix=f"{client_id}/client.metadata"
+        )
 
     def flows_for_server(self, flow_id):
         """A location to write flow objects."""
@@ -282,16 +284,16 @@ class HTTPClientPolicy(agent.ClientPolicy):
                 session=self._session, base=self.manifest_location.base,
                 path_prefix=utils.join_path(self.client_id, "jobs"))
         ]
-        for label in self.labels:
-            result.append(
-                http_location.HTTPLocation.from_keywords(
-                    session=self._session,
-                    base=self.manifest_location.base,
-                    # Make sure to append the secret to the unauthenticated
-                    # queues to prevent public (non deployment) access.
-                    path_prefix=utils.join_path(
-                        "labels", label, "jobs", self.secret))
+        result.extend(
+            http_location.HTTPLocation.from_keywords(
+                session=self._session,
+                base=self.manifest_location.base,
+                # Make sure to append the secret to the unauthenticated
+                # queues to prevent public (non deployment) access.
+                path_prefix=utils.join_path("labels", label, "jobs", self.secret),
             )
+            for label in self.labels
+        )
 
         return result
 
@@ -335,16 +337,14 @@ class RekallHTTPServerHandler(http.server.BaseHTTPRequestHandler, object):
         if (access not in policy.access or
             not self.base_path.startswith(policy.path_prefix) or
             arrow.Arrow.utcnow() > policy.expires):
-            self.session.logging.debug("Policy mismatch (%s): %s" % (
-                self.base_path, policy))
+            self.session.logging.debug(f"Policy mismatch ({self.base_path}): {policy}")
             return False
 
         # If the policy does not allow a template then path must match
         # exactly.
         if (policy.path_template == "" and
             self.base_path != policy.path_prefix):
-            self.session.logging.debug("Policy mismatch (%s): %s" % (
-                self.base_path, policy))
+            self.session.logging.debug(f"Policy mismatch ({self.base_path}): {policy}")
             return False
 
         self.public = policy.public
@@ -378,8 +378,7 @@ class RekallHTTPServerHandler(http.server.BaseHTTPRequestHandler, object):
 
         else:
             public_path = utils.join_path(".public", self.base_path)
-            generation = self._cache.get_generation(public_path)
-            if generation:
+            if generation := self._cache.get_generation(public_path):
                 self.serve_static(public_path)
                 return
 
@@ -433,10 +432,7 @@ class RekallHTTPServerHandler(http.server.BaseHTTPRequestHandler, object):
                     403, "You are not authorized to list this location.")
                 return
 
-            limit = 100
-            if "limit" in params:
-                limit = int(params["limit"][0])
-
+            limit = int(params["limit"][0]) if "limit" in params else 100
             result = []
             for i, row in enumerate(self._cache.list_files(path)):
                 if i > limit:
@@ -498,8 +494,7 @@ class RekallHTTPServerHandler(http.server.BaseHTTPRequestHandler, object):
                 self.send_error(404, "File not found")
                 return
 
-            if_modified_since = self.headers.get("If-Modified-Since")
-            if if_modified_since:
+            if if_modified_since := self.headers.get("If-Modified-Since"):
                 since = email_utils.parsedate(if_modified_since)
                 if since >= time.gmtime(old_div(int(generation),1e6)):
                     self.send_response(304)
@@ -524,11 +519,11 @@ class RekallHTTPServerHandler(http.server.BaseHTTPRequestHandler, object):
                 self.end_headers()
 
                 while True:
-                    data = fd.read(self.READ_BLOCK_SIZE)
-                    if not data:
+                    if data := fd.read(self.READ_BLOCK_SIZE):
+                        self.wfile.write(data)
+                    else:
                         break
 
-                    self.wfile.write(data)
         except (IOError, AttributeError):
             self.send_error(500, close=True)
 

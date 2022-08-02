@@ -42,7 +42,7 @@ class LinuxHighestUserAddress(common.AbstractLinuxParameterHook):
     def calculate(self):
         """Returns TASK_SIZE_MAX."""
         arch = self.session.profile.metadata("arch")
-        if arch == "I386" or arch == "ARM":
+        if arch in ["I386", "ARM"]:
             return self.session.GetParameter("linux_page_offset")
         elif arch == "AMD64":
             # #define TASK_SIZE_MAX   ((1UL << 47) - PAGE_SIZE)
@@ -80,13 +80,11 @@ class LinImageFingerprint(common.AbstractLinuxParameterHook):
         if self.session.physical_address_space.volatile:
             return obj.NoneObject("No fingerprint for volatile image.")
 
-        result = []
         profile = self.session.profile
         address_space = self.session.GetParameter("default_address_space")
 
         banner = profile.get_constant_object("linux_banner", "String")
-        result.append((address_space.vtop(banner.obj_offset), banner.v()))
-
+        result = [(address_space.vtop(banner.obj_offset), banner.v())]
         # Current system tick count.
         jiffies = profile.get_constant_object("jiffies", "String",
                                               dict(length=8, term=None))

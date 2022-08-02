@@ -145,9 +145,7 @@ class MemDumpMixin(core.DirectoryDumperMixin, MemmapMixIn):
                             task, filename)
 
             with renderer.open(directory=self.dump_dir,
-                               filename=filename,
-                               mode='wb') as fd:
-                with renderer.open(directory=self.dump_dir,
-                                   filename=filename + ".idx",
-                                   mode='wt') as index_fd:
+                                       filename=filename,
+                                       mode='wb') as fd:
+                with renderer.open(directory=self.dump_dir, filename=f"{filename}.idx", mode='wt') as index_fd:
                     self.dump_process(task, fd, index_fd)

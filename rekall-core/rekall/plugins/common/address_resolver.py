@@ -57,7 +57,7 @@ class Module(object):
         self.session = session
 
     def __str__(self):
-        return u"%s: %s" % (self.__class__.__name__, self.name)
+        return f"{self.__class__.__name__}: {self.name}"
 
 
 class AddressResolverMixin(object):
@@ -163,27 +163,22 @@ class AddressResolverMixin(object):
         Returns:
           a dict containing the different components of the expression.
         """
-        m = self.ADDRESS_NAME_REGEX.match(name)
-        if m:
+        if m := self.ADDRESS_NAME_REGEX.match(name):
             capture = m.groupdict()
             if not capture.get("address"):
-                module = capture.get("module")
-                if not module:
+                if module := capture.get("module"):
+                    capture["module"] = self.NormalizeModuleName(module)
+
+                else:
                     raise TypeError("Module name not specified.")
 
-                capture["module"] = self.NormalizeModuleName(module)
-
-            if capture["op"] and not (capture["symbol"] or
-                                      capture["address"] or
-                                      capture["module"]):
-                raise TypeError("Operator %s must have an operand." %
-                                capture["op"])
-
-            if capture["op"] and not (capture["symbol"] or capture["address"] or
-                                      capture["module"]):
-                raise TypeError(
-                    "Operator %s must operate on a symbol or address." %
-                    capture["op"])
+            if (
+                capture["op"]
+                and not capture["symbol"]
+                and not capture["address"]
+                and not capture["module"]
+            ):
+                raise TypeError(f'Operator {capture["op"]} must have an operand.')
 
             return capture
 
@@ -229,13 +224,11 @@ class AddressResolverMixin(object):
             raise ValueError("No symbol name specified.")
 
         module = self._modules_by_name.get(components["module"])
-        if module is not None:
-            # Just delegate to the module's profile.
-            if module.profile:
-                return module.profile.get_constant_object(
-                    components["symbol"], target=target, **kwargs)
+        if module is not None and module.profile:
+            return module.profile.get_constant_object(
+                components["symbol"], target=target, **kwargs)
 
-        return obj.NoneObject("Profile for name %s unknown." % name, log=True)
+        return obj.NoneObject(f"Profile for name {name} unknown.", log=True)
 
     def get_address_by_name(self, name):
         """Convert the symbol annotated by name to an address."""
@@ -255,19 +248,15 @@ class AddressResolverMixin(object):
         address = components["address"]
         if address is not None:
             address = int(address, 0)
-        # User did not specify an address
         else:
             module = self._modules_by_name.get(module_name)
             if not module:
-                return obj.NoneObject(
-                    "No module %s found" % module_name, log=True)
+                return obj.NoneObject(f"No module {module_name} found", log=True)
 
             # Found the module we use its base address
             address = module.start
 
-        # Search for a symbol in the module.
-        symbol = components["symbol"]
-        if symbol:
+        if symbol := components["symbol"]:
             # Get the profile for this module.
             if module.profile:
                 address = module.profile.get_constant(symbol, is_address=True)
@@ -275,9 +264,7 @@ class AddressResolverMixin(object):
             else:
                 return obj.NoneObject("No profile found for module", log=True)
 
-        # Support basic offset operations (+/-).
-        op = components["op"]
-        if op:
+        if op := components["op"]:
             op = op.strip()
             # Parse the offset as hex or decimal.
             offset = int(components["offset"], 0)
@@ -352,14 +339,14 @@ class AddressResolverMixin(object):
 
         # Exact symbols found.
         if offset == address:
-            return (offset, ["%s!%s" % (module.name, x) for x in symbols])
+            return offset, [f"{module.name}!{x}" for x in symbols]
 
         # Approximate symbol found, check if the profile knows its type.
         for x in symbols:
             if x in module.profile.constant_types:
                 type_name = self._format_type(module, x, address)
                 if type_name is not None:
-                    return (offset, ["%s!%s" % (module.name, type_name)])
+                    return offset, [f"{module.name}!{type_name}"]
 
         return (offset, ["%s!%s+%#x" % (module.name, x, address - offset)
                          for x in symbols])
@@ -381,10 +368,10 @@ class AddressResolverMixin(object):
 
                 # No member below this offset?
                 if member_offset is None:
-                    result += "+%s" % (offset - member_obj.obj_offset)
+                    result += f"+{offset - member_obj.obj_offset}"
                     break
 
-                result += ".%s" % member_below.obj_name
+                result += f".{member_below.obj_name}"
                 member_obj = member_below
 
             elif isinstance(member_obj, obj.Array):
@@ -392,12 +379,12 @@ class AddressResolverMixin(object):
                 item = member_obj[0]
                 next_lowest_index = (
                     offset - member_obj.obj_offset) // item.obj_size
-                result += "[%s]" % next_lowest_index
+                result += f"[{next_lowest_index}]"
 
                 member_obj = member_obj[next_lowest_index]
 
             else:
-                result += "+%s" % (offset - member_obj.obj_offset)
+                result += f"+{offset - member_obj.obj_offset}"
                 break
 
         return result
@@ -415,18 +402,19 @@ class AddressResolverMixin(object):
 
         components = self._ParseAddress(pattern)
         module_name = self.NormalizeModuleName(components["module"])
-        if module_name == None:
+        if module_name is None:
             raise RuntimeError(
                 "Module name must be specified for symbol search.")
 
-        module = self._modules_by_name.get(module_name)
-        if module:
+        if module := self._modules_by_name.get(module_name):
             # Match all symbols.
             symbol_regex = re.compile(components["symbol"].replace("*", ".*"))
             if module.profile:
-                for constant in module.profile.constants:
-                    if symbol_regex.match(constant):
-                        result.append("%s!%s" % (module_name, constant))
+                result.extend(
+                    f"{module_name}!{constant}"
+                    for constant in module.profile.constants
+                    if symbol_regex.match(constant)
+                )
 
         return result
 

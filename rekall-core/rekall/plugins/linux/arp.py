@@ -71,24 +71,7 @@ class Arp(common.LinuxPlugin):
 
     def get_handle_tables(self):
         # In earlier Linux neigh_table is a linked list.
-        if self.session.profile.neigh_table().m("next") != None:
-            tables = self.profile.get_constant_object(
-                "neigh_tables",
-                target="Pointer",
-                target_args=dict(
-                    target="neigh_table"
-                    )
-                )
-
-            for table in tables.walk_list("next"):
-                for x in self.handle_table(table):
-                    yield x
-
-        # But since 3.19 it is an array of pointers to neigh_tables.
-        # http://lxr.free-electrons.com/source/net/core/neighbour.c?v=3.19#L1517
-        # static struct neigh_table *neigh_tables[NEIGH_NR_TABLES]
-        # NEIGH_NR_TABLES is in an enum and it is 3.
-        else:
+        if self.session.profile.neigh_table().m("next") is None:
             tables = self.profile.get_constant_object(
                 "neigh_tables",
                 target="Array",
@@ -102,8 +85,18 @@ class Arp(common.LinuxPlugin):
             )
 
             for table in tables:
-                for x in self.handle_table(table):
-                    yield x
+                yield from self.handle_table(table)
+        else:
+            tables = self.profile.get_constant_object(
+                "neigh_tables",
+                target="Pointer",
+                target_args=dict(
+                    target="neigh_table"
+                    )
+                )
+
+            for table in tables.walk_list("next"):
+                yield from self.handle_table(table)
 
     def handle_table(self, ntable):
         # Support a few ways of finding these parameters depending on kernel
@@ -121,8 +114,7 @@ class Arp(common.LinuxPlugin):
 
         for neighbour in buckets:
             if neighbour:
-                for x in self.walk_neighbour(neighbour.deref()):
-                    yield x
+                yield from self.walk_neighbour(neighbour.deref())
 
     def walk_neighbour(self, neighbour):
         while 1:
@@ -149,5 +141,4 @@ class Arp(common.LinuxPlugin):
                 break
 
     def collect(self):
-        for x in self.get_handle_tables():
-            yield x
+        yield from self.get_handle_tables()

@@ -217,16 +217,13 @@ class ServiceAccount(common.AgentConfigMixin, serializer.SerializedObject):
 
         # Build the signed string according to
         # https://cloud.google.com/storage/docs/access-control/signed-urls#string-components
-        components = []
-        components.append(method)  # HTTP_Verb
-        components.append("")    # Content_MD5
-        components.append("")    # Content_Type
-        components.append(str(int(expiration))) # Expiration
-        for k, v in sorted(headers.to_primitive(False).iteritems()):
-            components.append("%s:%s" % (k, v))
+        components = [method, "", "", str(int(expiration))]
+        components.extend(
+            f"{k}:{v}" for k, v in sorted(headers.to_primitive(False).iteritems())
+        )
 
         path = urllib.quote(path, safe="/:")
-        base_url = "/" + utils.join_path(bucket, path)
+        base_url = f"/{utils.join_path(bucket, path)}"
 
         components.append(base_url)  # Canonicalized_Resource
 
@@ -270,7 +267,7 @@ class GCSLocation(location.Location):
 
     def get_requests_session(self):
         requests_session = self._session.GetParameter("requests_session")
-        if requests_session == None:
+        if requests_session is None:
             # To make sure we can use the requests session in the threadpool we
             # need to make sure that the connection pool can block. Otherwise it
             # will raise when it runs out of connections and the threads will be
@@ -315,10 +312,11 @@ class GCSLocation(location.Location):
         resp = self.get_requests_session().get(
             url_endpoint, params=params, headers=headers)
 
-        if not resp.ok:
-            return self._report_error(completion_routine, resp)
-
-        return resp.content
+        return (
+            resp.content
+            if resp.ok
+            else self._report_error(completion_routine, resp)
+        )
 
     def write_file(self, data, **kwargs):
         return self.upload_file_object(StringIO.StringIO(data), **kwargs)
@@ -455,10 +453,11 @@ class GCSLocation(location.Location):
                       message=None):
         if response:
             # Only include the text in case of error.
-            if not response.ok:
-                status = location.Status(response.status_code, response.text)
-            else:
-                status = location.Status(response.status_code)
+            status = (
+                location.Status(response.status_code)
+                if response.ok
+                else location.Status(response.status_code, response.text)
+            )
 
         else:
             status = location.Status(500, message)
@@ -467,10 +466,10 @@ class GCSLocation(location.Location):
             if completion_routine:
                 return completion_routine(status)
 
-            raise IOError(response.text)
-        else:
-            if completion_routine:
-                completion_routine(status)
+            else:
+                raise IOError(response.text)
+        elif completion_routine:
+            completion_routine(status)
 
         return response.ok
 
@@ -498,19 +497,20 @@ class GCSOAuth2BasedLocation(GCSLocation):
         """Calculates the params for the request."""
         base_url = self.to_path()
 
-        url_endpoint = ('https://storage.googleapis.com/%s' % base_url)
+        url_endpoint = f'https://storage.googleapis.com/{base_url}'
 
         headers = self.headers.to_primitive(False)
-        headers["Authorization"] = (
-            "Bearer " + self._config.server.service_account.oauth_token)
+        headers[
+            "Authorization"
+        ] = f"Bearer {self._config.server.service_account.oauth_token}"
+
         headers["Cache-Control"] = "private"
         if if_modified_since:
             headers["If-Modified-Since"] = handlers.format_date_time(
                 if_modified_since)
 
         params = {}
-        generation = generation or self.generation
-        if generation:
+        if generation := generation or self.generation:
             params["generation"] = generation
 
         return url_endpoint, params, headers, base_url
@@ -579,7 +579,7 @@ class GCSOAuth2BasedLocation(GCSLocation):
                 if local_file_should_be_removed:
                     os.unlink(local_filename)
 
-            raise IOError("Unable to update %s" % self)
+            raise IOError(f"Unable to update {self}")
 
     def read_modify_write(self, modification_cb, *args):
         """Atomically modify this location in a race free way.
@@ -633,8 +633,7 @@ class GCSOAuth2BasedLocation(GCSLocation):
                    max_results=100, **kwargs):
         """A generator of Location object below this one."""
         _, params, headers, _ = self._get_parameters(**kwargs)
-        url_endpoint = ("https://www.googleapis.com/storage/v1/b/%s/o" %
-                        self.bucket)
+        url_endpoint = f"https://www.googleapis.com/storage/v1/b/{self.bucket}/o"
 
         params["prefix"] = utils.join_path(self.path)
         params["maxResults"] = paging
@@ -676,8 +675,7 @@ class GCSUnauthenticatedLocation(GCSLocation):
     def _get_parameters(self, if_modified_since=None):
         base_url = self.to_path()
 
-        url_endpoint = ('https://storage.googleapis.com/%s' %
-                        base_url.lstrip("/"))
+        url_endpoint = f'https://storage.googleapis.com/{base_url.lstrip("/")}'
 
         headers = {"Cache-Control": "private"}
         if if_modified_since:
@@ -692,10 +690,7 @@ class GCSUnauthenticatedLocation(GCSLocation):
         resp = self.get_requests_session().get(
             url_endpoint, headers=headers)
 
-        if resp.ok:
-            return resp.content
-
-        return ""
+        return resp.content if resp.ok else ""
 
 
 class GCSSignedURLLocation(GCSLocation):
@@ -716,8 +711,7 @@ class GCSSignedURLLocation(GCSLocation):
     def _get_parameters(self):
         """Calculates the params for the request."""
         base_url = self.to_path()
-        url_endpoint = ('https://storage.googleapis.com/%s' %
-                        base_url.lstrip("/"))
+        url_endpoint = f'https://storage.googleapis.com/{base_url.lstrip("/")}'
         params = dict(GoogleAccessId=self.GoogleAccessId,
                       Expires="%d" % self.expiration,
                       Signature=base64.b64encode(self.signature))
@@ -786,11 +780,10 @@ class GzipWrapper(object):
 
     def __iter__(self):
         while 1:
-            data = self.read(self.BUFFER_SIZE)
-            if not data:
+            if data := self.read(self.BUFFER_SIZE):
+                yield data
+            else:
                 break
-
-            yield data
 
 
 class GCSSignedPolicyLocation(GCSLocation):

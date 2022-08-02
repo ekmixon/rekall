@@ -111,7 +111,7 @@ class MultiStringFinderCheck(ScannerCheck):
 
         # Passing large patterns to the acora module will cause huge memory
         # consumption.
-        if max([len(x) for x in needles]) > 50:
+        if max(len(x) for x in needles) > 50:
             raise RuntimeError("Pattern too large to search with ahocorasic.")
 
         # Our scanner must operate on raw bytes so we need to make
@@ -185,11 +185,7 @@ class StringCheck(ScannerCheck):
         # Search the rest of the buffer for the needle.
         buffer_offset = buffer_as.get_buffer_offset(offset) + self.needle_offset
         dindex = buffer_as.data.find(self.needle, buffer_offset + 1)
-        if dindex > -1:
-            return dindex - buffer_offset
-
-        # Skip entire region.
-        return buffer_as.end() - offset
+        return dindex - buffer_offset if dindex > -1 else buffer_as.end() - offset
 
 
 class RegexCheck(ScannerCheck):
@@ -288,11 +284,7 @@ class BufferASGenerator(object):
             # stop us too.
             self.current_run = next(self._generator)
 
-        while 1:
-            # We are done - return this buffer.
-            if fragments.total_length >= self.buffer_size:
-                break
-
+        while 1 and not fragments.total_length >= self.buffer_size:
             if readptr >= self.end:
                 raise StopIteration
 
@@ -557,9 +549,7 @@ class MultiStringScanner(BaseScanner):
                 needles=self.needles)
 
     def check_addr(self, offset, buffer_as=None):
-        # Ask the check if this offset is possible.
-        val = self.check.check(buffer_as, offset)
-        if val:
+        if val := self.check.check(buffer_as, offset):
             return offset, val
 
     def skip(self, buffer_as, offset):
@@ -645,9 +635,9 @@ class DiscontigScannerGroup(ScannerGroup):
 
         for (start, _, length) in self.address_space.get_address_ranges(
                 offset, offset + maxlen):
-            for match in super(DiscontigScannerGroup, self).scan(
-                    start, maxlen=length):
-                yield match
+            yield from super(DiscontigScannerGroup, self).scan(
+                start, maxlen=length
+            )
 
 
 class DebugChecker(ScannerCheck):

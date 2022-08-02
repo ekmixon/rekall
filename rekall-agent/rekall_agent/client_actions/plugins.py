@@ -54,8 +54,7 @@ class UploaderFileObject(object):
         return self.fd.tell()
 
     def read(self, length):
-        data = self.fd.read(length)
-        return data
+        return self.fd.read(length)
 
     def flush(self):
         """Upload the file."""
@@ -111,17 +110,19 @@ class PluginRenderer(renderer.BaseRenderer):
             message=record.getMessage(),
             timestamp=record.created,
             level=record.levelno,
-            source="%s:%s" % (record.module, record.lineno))
+            source=f"{record.module}:{record.lineno}",
+        )
 
     def section(self, name=None):
         if not name:
             self.section_number += 1
-            self.current_section = "data_%s" % self.section_number
+            self.current_section = f"data_{self.section_number}"
 
     def table_header(self, columns=None, **options):
-        self.columns = []
-        for column in (columns or []):
-            self.columns.append(dict(name=column['name'], type="any"))
+        self.columns = [
+            dict(name=column['name'], type="any") for column in (columns or [])
+        ]
+
         self.collection.tables.append(dict(name="data", columns=self.columns))
 
     def table_row(self, *row, **kwargs):
@@ -158,8 +159,7 @@ class PluginRenderer(renderer.BaseRenderer):
                 self._flow_obj.status.total_uploaded_files += 1
 
     def open(self, filename, **kwargs):
-        location = self._flow_obj.file_upload
-        if location:
+        if location := self._flow_obj.file_upload:
             self._flow_obj.status.total_uploaded_files += 1
             return UploaderFileObject(location, filename)
         else:
@@ -176,7 +176,7 @@ class PluginActionImpl(actions.PluginAction):
             with plugin_renderer:
                 # Find the plugin we need to call.
                 plugin_cls = plugin.Command.ImplementationByClass(self.plugin)
-                if plugin_cls == None:
+                if plugin_cls is None:
                     raise plugin.PluginError("Unknown plugin")
 
                 # Sometimes we dont know all the columns until we actually run

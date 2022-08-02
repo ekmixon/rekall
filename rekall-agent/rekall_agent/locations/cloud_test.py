@@ -35,7 +35,7 @@ class TestGCS(testlib.RekallBaseUnitTestCase):
 
         # Unique string to write to the bucket.
         self.string = str(time.time())
-        self.filename = "%s.txt" % time.time()
+        self.filename = f"{time.time()}.txt"
 
     def tearDown(self):
         # Remove the filename from the bucket.
@@ -65,9 +65,10 @@ class TestGCS(testlib.RekallBaseUnitTestCase):
         """
         now = int(time.time())
 
-        location_obj = (self.config.server
-                        .service_account.create_oauth_location(
-                            path="path/" + self.filename))
+        location_obj = self.config.server.service_account.create_oauth_location(
+            path=f"path/{self.filename}"
+        )
+
 
         # Reading and writing.
         location_obj.write_file("Hello world")
@@ -75,7 +76,7 @@ class TestGCS(testlib.RekallBaseUnitTestCase):
         stat = location_obj.stat()
 
         self.assertTrue(stat.size > 0)
-        self.assertEqual(stat.location.path, "path/" + self.filename)
+        self.assertEqual(stat.location.path, f"path/{self.filename}")
         self.assertTrue(stat.created.timestamp >= now)
         self.assertTrue(stat.created.timestamp <= int(time.time()))
 
@@ -87,7 +88,7 @@ class TestGCS(testlib.RekallBaseUnitTestCase):
         paths = [x.location.path for x in files]
 
         # We should see the new file in there.
-        self.assertTrue("path/" + self.filename in paths)
+        self.assertTrue(f"path/{self.filename}" in paths)
 
         # Deletion.
         location_obj.delete()
@@ -191,9 +192,10 @@ class TestGCS(testlib.RekallBaseUnitTestCase):
             "Hello world", subpath=self.filename))
 
         # Now read the document and make sure it wrote it properly.
-        location_obj = (self.config.server.service_account
-                        .create_oauth_location(
-                            path="signed_policy/%s" % self.filename))
+        location_obj = self.config.server.service_account.create_oauth_location(
+            path=f"signed_policy/{self.filename}"
+        )
+
 
         self.assertEqual(location_obj.read_file(), "Hello world")
 
@@ -213,9 +215,10 @@ class TestGCS(testlib.RekallBaseUnitTestCase):
             "Hello world", subpath=self.filename))
 
         # Now read the document and make sure it wrote it properly.
-        location_obj = (self.config.server.service_account
-                        .create_oauth_location(
-                            path=u"signed_policy/%s" % self.filename))
+        location_obj = self.config.server.service_account.create_oauth_location(
+            path=f"signed_policy/{self.filename}"
+        )
+
 
         self.assertEqual(location_obj.read_file(), "Hello world")
 

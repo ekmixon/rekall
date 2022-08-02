@@ -58,8 +58,8 @@ class ProfileTest(testlib.RekallBaseUnitTestCase):
         self.assertEqual(bf1 & bf2, 8 & 6)
         self.assertEqual(bf1 ^ bf2, 8 ^ 6)
         self.assertEqual(bf1 + 6, 8 + bf2)
-        self.assertEqual(bf1 < 6, 8 < bf2)
-        self.assertEqual(bf1 > 6, 8 > bf2)
+        self.assertEqual(bf1 < 6, bf2 > 8)
+        self.assertEqual(bf1 > 6, bf2 < 8)
         self.assertEqual(bf1 & 6, 8 & bf2)
         self.assertEqual(bf1 ^ 6, 8 ^ bf2)
 

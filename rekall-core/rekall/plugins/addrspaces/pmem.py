@@ -78,8 +78,7 @@ class MacPmemAddressSpace(addrspace.RunBasedAddressSpace):
     def __init__(self, base=None, filename=None, **kwargs):
         super(MacPmemAddressSpace, self).__init__(**kwargs)
 
-        self.as_assert(base == None,
-                       "Must be mapped directly over a raw device.")
+        self.as_assert(base is None, "Must be mapped directly over a raw device.")
         self.fname = filename or (self.session and self.session.GetParameter(
             "filename"))
 
@@ -94,10 +93,12 @@ class MacPmemAddressSpace(addrspace.RunBasedAddressSpace):
             raise addrspace.ASAssertionError(
                 "Filename does not exist or can not be opened.")
 
-        self.fname_info = "%s_info" % self.fname
-        self.as_assert(path.exists(self.fname_info),
-                       "MacPmem would declare a YML device at %s" %
-                       self.fname_info)
+        self.fname_info = f"{self.fname}_info"
+        self.as_assert(
+            path.exists(self.fname_info),
+            f"MacPmem would declare a YML device at {self.fname_info}",
+        )
+
 
         self._load_yml(self.fname_info)
 
@@ -107,10 +108,11 @@ class MacPmemAddressSpace(addrspace.RunBasedAddressSpace):
         This just trusts the EFI bootmap at the moment.
         """
         for record in records:
-            if record["type"] == "efi_range":
-                if efi_type_readable(record["efi_type"]):
-                    yield (record["start"], record["start"], record["length"],
-                           _StreamWrapper(self.session, self.fd))
+            if record["type"] == "efi_range" and efi_type_readable(
+                record["efi_type"]
+            ):
+                yield (record["start"], record["start"], record["length"],
+                       _StreamWrapper(self.session, self.fd))
 
     def ConfigureSession(self, session_obj):
         session_obj.SetCache("dtb", self.pmem_metadata["meta"]["dtb_off"],

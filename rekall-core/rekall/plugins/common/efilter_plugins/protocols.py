@@ -150,10 +150,7 @@ ordered.IOrdered.implement(
 )
 
 def _string_lt(x, y):
-    if string.isstring(y):
-        return string.string(x) < string.string(y)
-
-    return False
+    return string.string(x) < string.string(y) if string.isstring(y) else False
 
 # We can compare a string like object with another string like object.
 ordered.IOrdered.implement(
@@ -175,7 +172,7 @@ def _parse_datetime(string, timezone):
     )
 
     if code == 0:
-        raise ValueError("Unable to parse %s as a timestamp" % string)
+        raise ValueError(f"Unable to parse {string} as a timestamp")
 
     return arrow.Arrow.fromdatetime(res)
 

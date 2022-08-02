@@ -71,8 +71,7 @@ class FileSourceType(forensic_artifacts.SourceType):
 
         subflow.set_collection_name("{flow_id}/%s" % name)
 
-        for action in subflow.generate_actions():
-            yield action
+        yield from subflow.generate_actions()
 
 
 SOURCE_TYPES = {
@@ -98,10 +97,8 @@ class Artifact(agent.Flow):
                 definition = self._artifact_profile.GetDefinitionByName(
                     artifact_name, source_types=SOURCE_TYPES)
             except KeyError:
-                self._session.logging.error(
-                    "Unknown artifact %s" % artifact_name)
+                self._session.logging.error(f"Unknown artifact {artifact_name}")
                 continue
 
             for source in definition.sources:
-                for action in source.actions(self, download=self.copy_files):
-                    yield action
+                yield from source.actions(self, download=self.copy_files)

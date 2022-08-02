@@ -80,9 +80,11 @@ class FileBasedServerPolicy(agent.ServerPolicy):
         the ticket location.
         """
         return files.FileLocation.from_keywords(
-            session=self._session, path=os.path.join(
-                self.root_path, client_id, "flows",
-                flow_id + "." + "ticket"))
+            session=self._session,
+            path=os.path.join(
+                self.root_path, client_id, "flows", f"{flow_id}.ticket"
+            ),
+        )
 
     def get_flow_metadata_collection(self, client_id):
         return files.FileLocation.from_keywords(

@@ -33,29 +33,33 @@ class TestJSONCollection(testlib.RekallBaseUnitTestCase):
         self.session = self.MakeUserSession()
 
     def _make_collection(self):
-        # Make a SQL Collection.
-        collection = json_collection.JSONCollection.from_keywords(
+        return json_collection.JSONCollection.from_keywords(
             session=self.session,
             # Store the file locally.
             location=files.FileLocationImpl.from_keywords(
                 session=self.session,
                 path_prefix=self.temp_directory,
-                path_template="test_{part}.json"),
+                path_template="test_{part}.json",
+            ),
             max_rows=10,
-            tables=[dict(name="default",
-                         columns=[dict(name="c1", type="int"),
-                                  dict(name="c2", type="unicode"),
-                                  dict(name="c3", type="float")])],
+            tables=[
+                dict(
+                    name="default",
+                    columns=[
+                        dict(name="c1", type="int"),
+                        dict(name="c2", type="unicode"),
+                        dict(name="c3", type="float"),
+                    ],
+                )
+            ],
         )
-
-        return collection
 
     def testJSONCollection(self):
         collection = self._make_collection()
         with collection:
             for i in range(100):
                 # Insert some data.
-                collection.insert(c1=5 * i, c2="foobar%s" % i, c3=1.1 + i)
+                collection.insert(c1=5 * i, c2=f"foobar{i}", c3=1.1 + i)
 
         listed_files = os.listdir(self.temp_directory)
         self.assertEqual(len(listed_files), 10)

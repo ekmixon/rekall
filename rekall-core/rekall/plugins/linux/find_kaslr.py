@@ -114,7 +114,7 @@ class FindKaslr(common.AbstractLinuxCommandPlugin):
         valid_dtb_value = None
 
         last_address = self.session.physical_address_space.end() if \
-                self.plugin_args.scan_whole_physical_space else 0x40000000
+                    self.plugin_args.scan_whole_physical_space else 0x40000000
 
         for swapper_offset in scanner.scan(0, last_address):
             comment = ''
@@ -122,13 +122,13 @@ class FindKaslr(common.AbstractLinuxCommandPlugin):
                 .format(swapper_offset))
 
             potential_physical_shift = \
-                swapper_offset - comm_offset - init_task_offset
+                    swapper_offset - comm_offset - init_task_offset
 
             # this check should strip most false positive hits for swapper:
             # proceed only if the calculated shift is aligned
             if potential_physical_shift % 0x100000 != 0:
                 continue
-            
+
             # we expect the pid value to be 0
             pid_value = b'\x00' * self.profile.task_struct().pid.obj_size
             if pas.read(swapper_offset-comm_offset+pid_offset, 4) != pid_value:
@@ -177,7 +177,7 @@ class FindKaslr(common.AbstractLinuxCommandPlugin):
                 if comment != "No KASLR":
                     comment = ''
                 valid_dtb = False
-                
+
                 try:
                     valid_dtb = dtb_verifier.VerifyHit(dtb) != None
                 except TypeError:
@@ -187,7 +187,7 @@ class FindKaslr(common.AbstractLinuxCommandPlugin):
                     valid_dtb_value = dtb
                     if not comment:
                         comment = \
-                            "Use cmd line options --dtb and --kernel_slide."
+                                "Use cmd line options --dtb and --kernel_slide."
 
                 yield dict(physical_shift=physical_shift,
                            virtual_shift=virtual_shift,

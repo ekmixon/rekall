@@ -277,14 +277,14 @@ class IA32PagedMemory(addrspace.PagedReader):
         super(IA32PagedMemory, self).__init__(**kwargs)
 
         # We must be stacked on someone else:
-        if self.base == None:
+        if self.base is None:
             raise TypeError("No base Address Space")
 
         # If the underlying address space already knows about the dtb we use it.
         # Allow the dtb to be specified in the session.
         self.dtb = dtb or self.session.GetParameter("dtb")
 
-        if not self.dtb != None:
+        if self.dtb is None:
             raise TypeError("No valid DTB specified. Try the find_dtb"
                             " plugin to search for the dtb.")
         self.name = (name or 'Kernel AS') + "@%#x" % self.dtb
@@ -419,7 +419,7 @@ class IA32PagedMemory(addrspace.PagedReader):
         # Pages that hold PDEs and PTEs are 0x1000 bytes each.
         # Each PDE and PTE is four bytes. Thus there are 0x1000 / 4 = 0x400
         # PDEs and PTEs we must test
-        for pde in range(0, 0x400):
+        for pde in range(0x400):
             vaddr = pde << 22
             if vaddr > end:
                 return
@@ -594,7 +594,7 @@ class IA32PagedMemoryPae(IA32PagedMemory):
         # Pages that hold PDEs and PTEs are 0x1000 bytes each.
         # Each PDE and PTE is eight bytes. Thus there are 0x1000 / 8 = 0x200
         # PDEs and PTEs we must test.
-        for pdpte_index in range(0, 4):
+        for pdpte_index in range(4):
             vaddr = pdpte_index << 30
             if vaddr > end:
                 return
@@ -611,7 +611,7 @@ class IA32PagedMemoryPae(IA32PagedMemory):
                 continue
 
             tmp1 = vaddr
-            for pde_index in range(0, 0x200):
+            for pde_index in range(0x200):
                 vaddr = tmp1 | (pde_index << 21)
                 if vaddr > end:
                     return

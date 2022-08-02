@@ -35,14 +35,10 @@ class Pas2VasResolver(object):
         self.session = session
         self.dirty = True
 
-        # Maintains some maps to ensure fast lookups.
-        self.dtb2task = {}
         self.dtb2maps = {}
         self.dtb2userspace = {}
 
-        # Add the kernel.
-        self.dtb2task[self.session.GetParameter("dtb")] = "Kernel"
-
+        self.dtb2task = {self.session.GetParameter("dtb"): "Kernel"}
         pslist = self.session.plugins.pslist()
         for task in pslist.filter_processes():
             task_dtb = task.dtb
@@ -60,7 +56,7 @@ class Pas2VasResolver(object):
         return address
 
     def PA2VA_for_DTB(self, physical_address, dtb, userspace=None):
-        if dtb == None:
+        if dtb is None:
             return None, None
 
         # Choose the userspace mode automatically.
@@ -80,24 +76,19 @@ class Pas2VasResolver(object):
                 dtb, userspace=userspace)
             self.dtb2userspace[dtb] = userspace
 
-        if lookup_map:
-            if physical_address > lookup_map[0][0]:
-                # This efficiently finds the entry in the map just below the
-                # physical_address.
-                lookup_pa, length, lookup_va = lookup_map[
-                    bisect.bisect(
-                        lookup_map, (physical_address, 2**64, 0, 0))-1]
+        if lookup_map and physical_address > lookup_map[0][0]:
+            # This efficiently finds the entry in the map just below the
+            # physical_address.
+            lookup_pa, length, lookup_va = lookup_map[
+                bisect.bisect(
+                    lookup_map, (physical_address, 2**64, 0, 0))-1]
 
-                if (lookup_pa <= physical_address and
+            if (lookup_pa <= physical_address and
                         lookup_pa + length > physical_address):
-                    # Yield the pid and the virtual offset
-                    task = self.dtb2task.get(dtb)
-                    if task is not None:
-                        task = self.GetTaskStruct(task)
-                    else:
-                        task = "Kernel"
-
-                    return lookup_va + physical_address - lookup_pa, task
+                # Yield the pid and the virtual offset
+                task = self.dtb2task.get(dtb)
+                task = self.GetTaskStruct(task) if task is not None else "Kernel"
+                return lookup_va + physical_address - lookup_pa, task
 
         return None, None
 
@@ -188,13 +179,12 @@ class Pas2VasResolverJsonObjectRenderer(json_renderer.StateBasedObjectRenderer):
     renders_type = "Pas2VasResolver"
 
     def EncodeToJsonSafe(self, item, **_):
-        result = {}
-        result["dtb2task"] = item.dtb2task
-        result["dtb2maps"] = item.dtb2maps
-        result["dtb2userspace"] = item.dtb2userspace
-        result["mro"] = ":".join(self.get_mro(item))
-
-        return result
+        return {
+            "dtb2task": item.dtb2task,
+            "dtb2maps": item.dtb2maps,
+            "dtb2userspace": item.dtb2userspace,
+            "mro": ":".join(self.get_mro(item)),
+        }
 
     def DecodeFromJsonSafe(self, value, _):
         # Get the original class to instantiate the required item.

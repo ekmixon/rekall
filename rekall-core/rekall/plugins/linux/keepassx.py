@@ -59,10 +59,9 @@ class Keepassx(heap_analysis.HeapAnalysis):
         for task in self.filter_processes():
             if self.init_for_task(task):
 
-                yield dict(divider="Task: %s (%s)" % (task.name,
-                                                      task.pid))
+                yield dict(divider=f"Task: {task.name} ({task.pid})")
 
-                chunks_dict = dict()
+                chunks_dict = {}
 
                 data_offset = self.profile.get_obj_offset("malloc_chunk", "fd")
 
@@ -100,7 +99,7 @@ class Keepassx(heap_analysis.HeapAnalysis):
                     try:
                         # chunks containing refs to password entries typically
                         # have a size of 96 in the tested 32 bit environment
-                        if not chunk.chunksize() == relevant_chunk_size:
+                        if chunk.chunksize() != relevant_chunk_size:
                             continue
 
                         p_entry_data = chunk.get_chunk_data()

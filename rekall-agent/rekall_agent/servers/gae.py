@@ -18,9 +18,9 @@ class GAEClientPolicy(agent.ClientPolicyImpl):
     def get_jobs_queues(self):
         return [
             http_location.HTTPLocationImpl.from_keywords(
-                session=self._session, base=self.manifest_location.base,
+                session=self._session,
+                base=self.manifest_location.base,
                 path_prefix="jobs",
-                path_template="?last_flow_time=%s" % (
-                    self._config.client.writeback.last_flow_time.timestamp),
+                path_template=f"?last_flow_time={self._config.client.writeback.last_flow_time.timestamp}",
             )
         ]

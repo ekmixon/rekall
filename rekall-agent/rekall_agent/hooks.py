@@ -59,29 +59,25 @@ class AgentConfigHook(kb.ParameterHook):
             config_data = os.environ.get("REKALL_AGENT_CONFIG")
 
         if not config_data:
-            # The configuration file can be given in the session, or specified
-            # on the command line. This is the path to the agent config file.
-            agent_config = self.session.GetParameter("agent_configuration")
-            if not agent_config:
-                agent_config = os.environ.get("REKALL_AGENT_CONFIG_FILE")
-
-            if agent_config:
+            if agent_config := self.session.GetParameter(
+                "agent_configuration"
+            ) or os.environ.get("REKALL_AGENT_CONFIG_FILE"):
                 # Set the search path to the location of the configuration
                 # file. This allows @file directives to access files relative to
                 # the main config file.
-                if self.session.GetParameter("config_search_path") == None:
+                if self.session.GetParameter("config_search_path") is None:
                     self.session.SetParameter(
                         "config_search_path", [os.path.dirname(agent_config)])
 
                 with open(agent_config, "rb") as fd:
                     config_data = fd.read()
 
-        if not config_data:
-            return obj.NoneObject("No valid configuration provided in session.")
-
-        # We deliberately do not raise errors for unknown fields in
-        # case the configuration was created in older agent version -
-        # We just ignore unknown fields.
-        return serializer.unserialize(
-            session=self.session, data=yaml.safe_load(config_data),
-            strict_parsing=False)
+        return (
+            serializer.unserialize(
+                session=self.session,
+                data=yaml.safe_load(config_data),
+                strict_parsing=False,
+            )
+            if config_data
+            else obj.NoneObject("No valid configuration provided in session.")
+        )

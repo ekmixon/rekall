@@ -83,15 +83,12 @@ class CheckProcFops(common.LinuxPlugin):
 
         # Yield our peers.
         for proc_dir_entry in current.walk_list("next"):
-            for x in self._walk_proc(proc_dir_entry, seen, path):
-                yield x
-
+            yield from self._walk_proc(proc_dir_entry, seen, path)
         # Now also yield the subdirs:
         if current.subdir:
-            for x in self._walk_proc(
-                current.subdir, seen,
-                posixpath.join(path, str(current.Name))):
-                yield x
+            yield from self._walk_proc(
+                current.subdir, seen, posixpath.join(path, str(current.Name))
+            )
 
     def check_proc_fop(self):
         """Check the proc mount point."""

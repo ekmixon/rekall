@@ -72,7 +72,6 @@ def EulersDecimals():
             a, b = x * a + b, a
             c, d = x * c + d, c
 
-        for digit in yield_digits(a, c):
-            yield digit
+        yield from yield_digits(a, c)
 
     return z(e_continued_fraction())

@@ -93,15 +93,14 @@ class Index(obj.Profile):
 
             # If the offset is not mapped in we can not compare it. Skip it.
             offset_to_check = image_base + offset
-            if address_space.vtop(offset_to_check) == None:
+            if address_space.vtop(offset_to_check) is None:
                 continue
 
-            match = self._TestSymbols(
+            if match := self._TestSymbols(
                 address_space=address_space,
                 offset=offset_to_check,
-                possible_values=possible_values)
-
-            if match:
+                possible_values=possible_values,
+            ):
                 self.session.report_progress(
                     "%s matched offset %#x+%#x=%#x (%s)",
                     profile, offset, image_base, offset+image_base,
@@ -129,7 +128,7 @@ class Index(obj.Profile):
         return 0
 
     def IndexHits(self, image_base, address_space=None, minimal_match=1):
-        if address_space == None:
+        if address_space is None:
             address_space = self.session.GetParameter("default_address_space")
         for profile, symbols in six.iteritems(self.index):
             match = self._TestProfile(
@@ -201,9 +200,12 @@ class SymbolOffsetIndex(Index):
 
             for trait in traits:
                 # A trait is a list of symbol-offset tuples.
-                match = all([relative_symbols.get(symbol) == offset
-                             for (symbol, offset) in trait
-                             if isinstance(symbol, basestring)])
+                match = all(
+                    relative_symbols.get(symbol) == offset
+                    for (symbol, offset) in trait
+                    if isinstance(symbol, basestring)
+                )
+
                 if match:
                     matched_traits += 1
 
@@ -255,7 +257,7 @@ class SymbolOffsetIndex(Index):
         A trait is a list of tuples (symbol, offset) that uniquely identify
         a profile.
         """
-        return all([profile.get_constant(t[0]) == t[1] for t in trait])
+        return all(profile.get_constant(t[0]) == t[1] for t in trait)
 
     @classmethod
     def RawProfileMatchesTrait(cls, profile, trait):
@@ -265,7 +267,7 @@ class SymbolOffsetIndex(Index):
         a profile.
         """
         try:
-          return all([profile.get(t[0]) == t[1] for t in trait])
+            return all(profile.get(t[0]) == t[1] for t in trait)
         except:
           return False
 
@@ -295,11 +297,11 @@ class SymbolOffsetIndex(Index):
         hashes = hashes or {}
         traits = traits or {}
         # Assert all profiles that have hashes have traits as well
-        if not all([profile in hashes.values() for profile in traits]):
+        if any(profile not in hashes.values() for profile in traits):
             raise ValueError("Not all profiles with traits have hashes")
 
         # Assert all profiles that have traits have hashes as well
-        if not all([profile in traits for profile in hashes.values()]):
+        if any(profile not in traits for profile in hashes.values()):
             raise ValueError("Not all profiles with hashes have traits")
 
         profiles = dict([(profile_id,
@@ -312,23 +314,19 @@ class SymbolOffsetIndex(Index):
             profiles[duplicate_profile] = cls.GetProfileMetadata(
                 iomanager=iomanager, profile_id=duplicate_profile)
 
-        index = {
+        return {
             "$METADATA": metadata,
             "$INDEX": {
                 "$TRAITS": traits or {},
                 "$PROFILES": profiles or {},
                 "$HASHES": hashes or {},
-            }
+            },
         }
-
-        return index
 
     @classmethod
     def GetProfileMetadata(cls, iomanager=None, profile_id=None):
-        profile_metadata = dict()
         file_mtime = iomanager.Metadata(profile_id)["LastModified"]
-        profile_metadata["LastModified"] = file_mtime
-        return profile_metadata
+        return {"LastModified": file_mtime}
 
     def __len__(self):
         return len(self.traits)
@@ -339,8 +337,7 @@ class SymbolOffsetIndex(Index):
         Each trait is a list of tuples of (symbol, offset) that make this
         profile unique within the repository.
         """
-        for profile, traits in six.iteritems(self.index.get("$TRAITS")):
-            yield profile, traits
+        yield from six.iteritems(self.index.get("$TRAITS"))
 
     def RelativizeSymbols(self, symbols, base_symbol=None):
         """Modifies a dict of symbols so its offsets relative to base_symbol.
@@ -373,8 +370,13 @@ class LinuxSymbolOffsetIndex(SymbolOffsetIndex):
     @classmethod
     def FilterSymbols(cls, symbols):
         """Filters a dict of symbols, discarding irrelevant ones."""
-        return dict([(k, v) for (k, v) in six.iteritems(symbols)
-                     if not "." in k and k != "__irf_end"])
+        return dict(
+            [
+                (k, v)
+                for (k, v) in six.iteritems(symbols)
+                if "." not in k and k != "__irf_end"
+            ]
+        )
 
     @classmethod
     def BuildIndex(cls, hashes=None, traits=None, duplicates=None, spec=None,

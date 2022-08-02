@@ -69,13 +69,11 @@ def RekallCompleter(self, text):
 
         global_matches = set(self.global_matches(command))
 
-        # Complete strings which look like symbol names.
-        m = re.match("\"([^!]+![^\"]*)$", command_parts[-1])
-        if m:
+        if m := re.match("\"([^!]+![^\"]*)$", command_parts[-1]):
             session = self.namespace.get("session")
 
             # If this is the only match, close the quotes to save typing.
-            result = session.address_resolver.search_symbol(m.group(1) + "*")
+            result = session.address_resolver.search_symbol(m[1] + "*")
             if len(result) == 1:
                 result = [result[0] + "\""]
 
@@ -85,12 +83,9 @@ def RekallCompleter(self, text):
         # Only complete if there is exactly one object which matches and a space
         # was typed after it. e.g.: pslist <cursor>
         if (command in global_matches and len(command_parts) > 1):
-            # Get the object and ask it about the list of args that it supports.
-            obj = self.namespace.get(command)
-            if obj:
+            if obj := self.namespace.get(command):
                 try:
-                    matches = [
-                        "%s=" % x["name"] for x in obj.Metadata()["arguments"]]
+                    matches = [f'{x["name"]}=' for x in obj.Metadata()["arguments"]]
                     return [utils.SmartUnicode(x)
                             for x in matches if x.startswith(text)]
                 except Exception:
@@ -98,8 +93,6 @@ def RekallCompleter(self, text):
 
         return []
 
-    # Wide exception is necessary here because otherwise the completer will
-    # swallow all errors.
     except Exception as e:
         logging.debug(e)
 
@@ -123,9 +116,9 @@ class RekallObjectInspector(oinspect.Inspector):
         try:
             type = arg["type"]
             if type in ["Choices", "ChoiceArray"] and arg["choices"]:
-                desc += " (type: %s: %s)" % (type, ", ".join(arg["choices"]))
+                desc += f' (type: {type}: {", ".join(arg["choices"])})'
             else:
-                desc += " (type: %s)" % type
+                desc += f" (type: {type})"
 
         except KeyError:
             pass
@@ -144,10 +137,7 @@ class RekallObjectInspector(oinspect.Inspector):
             if arg.get("positional", False) == positional:
                 self._format_parameter(displayfields, arg)
 
-        if displayfields:
-            return self._format_fields(displayfields)
-
-        return ""
+        return self._format_fields(displayfields) if displayfields else ""
 
     def plugin_pinfo(self, runner, detail_level=0):
         """Generate info dict for a plugin from a plugin runner."""
@@ -156,21 +146,23 @@ class RekallObjectInspector(oinspect.Inspector):
 
         display_fields = [
             ("file", oinspect.find_file(plugin_class)),
-            ("Plugin", "%s (%s)" % (plugin_class.__name__, plugin_class.name))]
+            ("Plugin", f"{plugin_class.__name__} ({plugin_class.name})"),
+        ]
+
         if getattr(plugin_class, "table_header", None):
             display_fields.append(
                 ("", "This is a Typed Plugin."))
 
         display_fields += [
-            ("Positional Args",
-             self.format_parameters(plugin_class, True)),
-            ("Keyword Args",
-             self.format_parameters(plugin_class, False)),
+            ("Positional Args", self.format_parameters(plugin_class, True)),
+            ("Keyword Args", self.format_parameters(plugin_class, False)),
             ("Docstring", oinspect.getdoc(plugin_class) or ""),
-            ("Link", (
-                "http://www.rekall-forensic.com/epydocs/%s.%s-class.html" % (
-                    plugin_class.__module__, plugin_class.__name__))),
+            (
+                "Link",
+                f"http://www.rekall-forensic.com/epydocs/{plugin_class.__module__}.{plugin_class.__name__}-class.html",
+            ),
         ]
+
 
         # Include the source if required.
         if detail_level > 0:
@@ -182,9 +174,7 @@ class RekallObjectInspector(oinspect.Inspector):
     def pinfo(self, obj, oname='', formatter=None, info=None,
               detail_level=0, **kw):
         if isinstance(obj, session_module.PluginRunner):
-            # Delegate info generation for PluginRunners.
-            result = self.plugin_pinfo(obj, detail_level=detail_level)
-            if result:
+            if result := self.plugin_pinfo(obj, detail_level=detail_level):
                 page.page(result)
 
         else:
@@ -233,8 +223,9 @@ class RekallPrompt(prompts.Prompts):
             except Exception:
                 self.shell.highlighting_style = old_style
                 session.logging.error(
-                    "Style %s not valid. Valid styles are %s" %
-                    (style, list(styles.get_all_styles())))
+                    f"Style {style} not valid. Valid styles are {list(styles.get_all_styles())}"
+                )
+
 
         return [
             (Token.Prompt, "["),

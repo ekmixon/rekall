@@ -165,7 +165,7 @@ class ListDirectoryAction(action.ActionImpl):
 
         # Now we just build a glob pattern for recursing into the
         # directory.
-        glob = root.add("**%s" % self.depth)
+        glob = root.add(f"**{self.depth}")
 
         glob_plugin = self._session.plugins.glob(
             globs=[glob.name],
@@ -192,8 +192,7 @@ class ListDirectoryAction(action.ActionImpl):
 
     drive_re = re.compile("/([a-zA-Z]:)(.*)")
     def splitdrive(self, path):
-        m = self.drive_re.match(path)
-        if m:
+        if m := self.drive_re.match(path):
             return m.group(1), m.group(2) or "/"
 
         return "", path or "/"
@@ -207,8 +206,7 @@ class ListDirectoryAction(action.ActionImpl):
                 yield drive + os.path.sep
 
         else:
-            for x in os.listdir(path):
-                yield x
+            yield from os.listdir(path)
 
     def _process_files(self, root, files):
         drive, path = self.splitdrive(root)
@@ -250,10 +248,9 @@ class ListDirectoryAction(action.ActionImpl):
     def collect(self):
         if self.recursive:
             for root, directories, files in os.walk(self.path):
-                for x in helpers.ListFilter().filter(
-                        self.filter,
-                        self._process_files(root, files)):
-                    yield x
+                yield from helpers.ListFilter().filter(
+                    self.filter, self._process_files(root, files)
+                )
 
                 new_dirs = []
                 for x in helpers.ListFilter().filter(
@@ -267,10 +264,10 @@ class ListDirectoryAction(action.ActionImpl):
                 directories[:] = new_dirs
 
         else:
-            for x in helpers.ListFilter().filter(
-                    self.filter,
-                    self._process_files(self.path, self.listdir(self.path))):
-                yield x
+            yield from helpers.ListFilter().filter(
+                self.filter,
+                self._process_files(self.path, self.listdir(self.path)),
+            )
 
 
     def run(self, flow_obj=None):

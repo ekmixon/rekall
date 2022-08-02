@@ -106,8 +106,7 @@ class AFF4AddressSpace(addrspace.CachingAddressSpaceMixIn,
 
     def __init__(self, filename=None, **kwargs):
         super(AFF4AddressSpace, self).__init__(**kwargs)
-        self.as_assert(self.base == None,
-                       "Must stack on another address space")
+        self.as_assert(self.base is None, "Must stack on another address space")
 
         path = filename or self.session.GetParameter("filename")
         self.as_assert(path != None, "Filename must be specified")
@@ -117,8 +116,7 @@ class AFF4AddressSpace(addrspace.CachingAddressSpaceMixIn,
 
         # If we have a cache directory, configure AFF4 to use it.
         try:
-            cache_dir = cache.GetCacheDir(self.session)
-            if cache_dir:
+            if cache_dir := cache.GetCacheDir(self.session):
                 self.resolver.Set(lexicon.AFF4_CONFIG_CACHE_DIR,
                                   lexicon.AFF4_FILE_NAME,
                                   rdfvalue.XSDString(
@@ -142,8 +140,7 @@ class AFF4AddressSpace(addrspace.CachingAddressSpaceMixIn,
                 self._AutoLoadAFF4Volume(volume_path)
                 return
             except IOError as e:
-                raise addrspace.ASAssertionError(
-                    "Unable to open AFF4 volume: %s" % e)
+                raise addrspace.ASAssertionError(f"Unable to open AFF4 volume: {e}")
 
         # If the user asked for a specific stream just load that one. Note that
         # you can still load the pagefile manually using the --pagefile
@@ -153,8 +150,8 @@ class AFF4AddressSpace(addrspace.CachingAddressSpaceMixIn,
             self._LoadMemoryImage(image_urn)
         except IOError as e:
             raise addrspace.ASAssertionError(
-                "Unable to open AFF4 stream %s: %s" % (
-                    stream_path, e))
+                f"Unable to open AFF4 stream {stream_path}: {e}"
+            )
 
     def _LocateAFF4Volume(self, filename):
         stream_name = []
@@ -182,7 +179,7 @@ class AFF4AddressSpace(addrspace.CachingAddressSpaceMixIn,
                         return volume.urn, None
 
                 else:
-                    raise IOError("Not found: %s" % volume_urn)
+                    raise IOError(f"Not found: {volume_urn}")
 
             elif volume_urn_parts.scheme == "gs" and aff4_cloud:
                 with aff4_cloud.AFF4GStore.NewAFF4GStore(
@@ -192,8 +189,6 @@ class AFF4AddressSpace(addrspace.CachingAddressSpaceMixIn,
 
                     return volume.urn, None
 
-            # File does not exist - maybe the path stem points at a stream in
-            # the image.
             else:
                 stream_name.insert(0, path_components.pop(-1))
 
@@ -212,28 +207,25 @@ class AFF4AddressSpace(addrspace.CachingAddressSpaceMixIn,
         self.as_assert(self.image is not None,
                        "No physical memory categories found.")
 
-        self.filenames = {}
-        # Newer AFF4 images should have the AFF4_STREAM_ORIGINAL_FILENAME
-        # attribute set.
-        for (subject, _, value) in self.resolver.QueryPredicate(
-                lexicon.AFF4_STREAM_ORIGINAL_FILENAME):
-            # Normalize the filename for case insensitive filesysyems.
-            self.filenames[utils.SmartUnicode(value).lower()] = subject
+        self.filenames = {
+            utils.SmartUnicode(value).lower(): subject
+            for subject, _, value in self.resolver.QueryPredicate(
+                lexicon.AFF4_STREAM_ORIGINAL_FILENAME
+            )
+        }
 
         # TODO: Deprecate this guessing once all images have the
         # AFF4_STREAM_ORIGINAL_FILENAME attribute.
         for subject in self.resolver.QuerySubject(re.compile(b".")):
-            relative_name = self.volume_urn.RelativePath(subject)
-            if relative_name:
+            if relative_name := self.volume_urn.RelativePath(subject):
                 filename = self._normalize_filename(relative_name)
                 self.filenames[filename] = subject
 
     def _normalize_filename(self, filename):
         """Normalize the filename based on the source OS."""
-        m = re.match(r"/?([a-zA-Z]:[/\\].+)", filename)
-        if m:
+        if m := re.match(r"/?([a-zA-Z]:[/\\].+)", filename):
             # This is a windows filename.
-            filename = m.group(1).replace("/", "\\")
+            filename = m[1].replace("/", "\\")
 
             return filename.lower()
 
@@ -280,10 +272,7 @@ class AFF4AddressSpace(addrspace.CachingAddressSpaceMixIn,
 
     def get_file_address_space(self, filename):
         """Return an address space for filename."""
-        subject = utils.CaseInsensitiveDictLookup(
-            filename, self.filenames)
-
-        if subject:
+        if subject := utils.CaseInsensitiveDictLookup(filename, self.filenames):
             return AFF4StreamWrapper(self.resolver.AFF4FactoryOpen(subject))
         return
 
@@ -300,20 +289,11 @@ class AFF4AddressSpace(addrspace.CachingAddressSpaceMixIn,
         mapped_offset = utils.CaseInsensitiveDictLookup(
             filename, self.mapped_files)
         if mapped_offset is None:
-            # Try to map the file.
-            subject = utils.CaseInsensitiveDictLookup(
-                filename, self.filenames)
-
-            # Fall back to looking up the sysnative path in case the
-            # image was acquired by a 32 bit imager.
-            if not subject:
-                # The 32 bit WinPmem imager access native files via
-                # SysNative but they are really located in System32.
-                subject = utils.CaseInsensitiveDictLookup(
-                    filename.replace("SysNative", "System32"),
-                    self.filenames)
-
-            if subject:
+            if subject := utils.CaseInsensitiveDictLookup(
+                filename, self.filenames
+            ) or utils.CaseInsensitiveDictLookup(
+                filename.replace("SysNative", "System32"), self.filenames
+            ):
                 stream = self.resolver.AFF4FactoryOpen(subject)
                 mapped_offset = self.file_mapping_offset(filename)
                 self.add_run(mapped_offset, 0, stream.Size(),
@@ -360,7 +340,8 @@ class AFF4AddressSpace(addrspace.CachingAddressSpaceMixIn,
                         session.SetCache(session_param, value, volatile=False)
         except IOError:
             session.logging.info(
-                "AFF4 volume does not contain %s/information.yaml" % image_urn)
+                f"AFF4 volume does not contain {image_urn}/information.yaml"
+            )
 
     def describe(self, address):
         start, _, run = self.runs.get_containing_range(address)

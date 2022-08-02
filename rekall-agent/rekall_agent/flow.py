@@ -302,11 +302,11 @@ class Flow(common.AgentConfigMixin, serializer.SerializedObject):
         # There are some differences in the ways flows and hunts are organized.
         if self.is_hunt():
             self.ticket = HuntStatus(session=self._session)
-            self.flow_id = "H_%s" % os.urandom(5).encode("hex")
+            self.flow_id = f'H_{os.urandom(5).encode("hex")}'
 
         else:
             self.ticket = FlowStatus(session=self._session)
-            self.flow_id = "F_%s" % os.urandom(5).encode("hex")
+            self.flow_id = f'F_{os.urandom(5).encode("hex")}'
 
         # Make a random flow id.
         self.created_time = time.time()
@@ -366,13 +366,13 @@ class Flow(common.AgentConfigMixin, serializer.SerializedObject):
             jobs_file = JobFile(session=self._session)
 
         # Remove those flows which are done.
-        filtered_flows = []
-        for flow_obj in jobs_file.flows:
-            # If the status in the flow database is "Pending" we need to keep
-            # the flow in the jobs file.
+        filtered_flows = [
+            flow_obj
+            for flow_obj in jobs_file.flows
             if flow_collection.query(
-                    "select * from tbl_default where status = 'Pending'"):
-                filtered_flows.append(flow_obj)
+                "select * from tbl_default where status = 'Pending'"
+            )
+        ]
 
         # Make sure the flows are sorted by create time.
         filtered_flows.sort(key=lambda x: x.created_time)

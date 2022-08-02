@@ -86,8 +86,7 @@ def main(argv=None):
 
     def global_arg_cb(global_flags, _):
         if global_flags.version:
-            print("This is Rekall Version %s (%s)" % (
-                constants.VERSION, constants.CODENAME))
+            print(f"This is Rekall Version {constants.VERSION} ({constants.CODENAME})")
 
             print(rekall.get_versions())
             sys.exit(0)
@@ -103,7 +102,7 @@ def main(argv=None):
         # Run the plugin with plugin specific args.
         user_session.RunPlugin(plugin_cls, **config.RemoveGlobalOptions(flags))
     except Exception as e:
-        logging.fatal("%s. Try --debug for more information." % e)
+        logging.fatal(f"{e}. Try --debug for more information.")
         if getattr(flags, "debug", None):
             pdb.post_mortem(sys.exc_info()[2])
         raise

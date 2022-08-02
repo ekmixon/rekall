@@ -44,8 +44,7 @@ class Lsmod(common.LinuxPlugin):
             "modules", target="list_head", vm=self.kernel_address_space)
 
         # walk the modules list
-        for module in modules.list_of_type("module", "list"):
-            yield module
+        yield from modules.list_of_type("module", "list")
 
     def collect(self):
         for module in self.get_module_list():
@@ -69,8 +68,7 @@ class LsmodSections(common.LinuxPlugin):
     def get_module_sections(self, module):
         num_sects = module.sect_attrs.nsections or 0
         for i in range(num_sects):
-            section_attr = module.sect_attrs.attrs[i]
-            yield section_attr
+            yield module.sect_attrs.attrs[i]
 
     def collect(self):
         lsmod = self.session.plugins.lsmod()
@@ -116,7 +114,7 @@ class Lsmod_parameters(common.LinuxPlugin):
 
     def get_module_parameters(self, module):
         for kernel_param in module.m("kp"):
-            if kernel_param.getter_addr == None:
+            if kernel_param.getter_addr is None:
                 continue
 
             getter_function = self.profile.Function(
@@ -124,8 +122,7 @@ class Lsmod_parameters(common.LinuxPlugin):
                 vm=self.kernel_address_space)
 
             value = None
-            lookup = self.arg_lookuptable.get(kernel_param.getter_addr)
-            if lookup:
+            if lookup := self.arg_lookuptable.get(kernel_param.getter_addr):
                 type, args = lookup
 
                 # The arg type is a pointer to a basic type.
@@ -138,7 +135,6 @@ class Lsmod_parameters(common.LinuxPlugin):
 
                 value = kernel_param.m("u1").str.deref().v()
 
-            #It is an array of values.
             elif getter_function == self.profile.get_constant_object(
                     "param_array_get", target="Function",
                     vm=self.kernel_address_space):

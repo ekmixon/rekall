@@ -134,8 +134,9 @@ class CommandWrapper(object):
             if desc["name"] == name:
                 return desc
 
-        raise plugin.PluginError("Unknown arg %s for plugin %s" % (
-            name, self.plugin_cls.name))
+        raise plugin.PluginError(
+            f"Unknown arg {name} for plugin {self.plugin_cls.name}"
+        )
 
     def __repr__(self):
         return "<CommandWrapper: %r>" % (self.plugin_cls.__name__)
@@ -378,14 +379,12 @@ class EfilterPlugin(plugin.TypedProfileCommand, plugin.Command):
     # IStructured implementation for EFILTER:
     def resolve(self, name):
         """Find and return a CommandWrapper for the plugin 'name'."""
-        function = self.scope.get(name)
-        if function:
+        if function := self.scope.get(name):
             return function
 
         meta = self.session.plugins.plugin_db.GetActivePlugin(name)
         if meta != None:
-            wrapper = CommandWrapper(meta.plugin_cls, self.session)
-            return wrapper
+            return CommandWrapper(meta.plugin_cls, self.session)
 
         raise KeyError("No plugin named %r." % name)
 
@@ -690,7 +689,7 @@ class Search(EfilterPlugin):
                 "columns. (%s)" % (e.key, e))
 
         except errors.EfilterError as e:
-            raise plugin.PluginError("EFilter Error: %s:" % e)
+            raise plugin.PluginError(f"EFilter Error: {e}:")
 
         all_rows = itertools.chain((first_row,), remaining_rows)
 
@@ -758,7 +757,7 @@ associative.IAssociative.implement(
 
 
 def Struct_getmembers_runtime(item):
-    result = set((name for name, _ in item.getproperties()))
+    result = {name for name, _ in item.getproperties()}
     result.update(["obj_offset", "obj_type", "obj_name"])
     return result
 

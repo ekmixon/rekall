@@ -49,13 +49,14 @@ class CheckAFInfo(common.LinuxPlugin):
         members = sorted(self.profile.file_operations().members.keys())
         if self.profile.has_type("seq_operations"):
             # Newer kernels use seq_ops struct.
-            members.extend(["seq_ops.%s" % x
-                            for x in self.profile.seq_operations().members])
+            members.extend([f"seq_ops.{x}" for x in self.profile.seq_operations().members])
 
         if self.profile.has_type("file_operations"):
             # Newer kernels use seq_ops struct.
-            members.extend(["seq_fops.%s" % x
-                            for x in self.profile.file_operations().members])
+            members.extend(
+                [f"seq_fops.{x}" for x in self.profile.file_operations().members]
+            )
+
 
         return [
             dict(name="tcp",

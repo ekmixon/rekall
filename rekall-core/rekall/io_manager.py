@@ -113,7 +113,7 @@ class IOManager(with_metaclass(registry.MetaclassRegistry, object)):
         self.mode = mode
         self.urn = urn
         self.version = version
-        if session == None:
+        if session is None:
             raise RuntimeError("Session must be set")
 
         self.session = session
@@ -189,7 +189,7 @@ class IOManager(with_metaclass(registry.MetaclassRegistry, object)):
         self.inventory.setdefault("$METADATA", dict(
             Type="Inventory",
             ProfileClass="Inventory"))
-        self.inventory.setdefault("$INVENTORY", dict())
+        self.inventory.setdefault("$INVENTORY", {})
 
         self.StoreData("inventory", self.inventory)
         self._dirty = False
@@ -258,11 +258,7 @@ class IOManager(with_metaclass(registry.MetaclassRegistry, object)):
         try:
             fd = self.Open(name)
             data = fd.read(MAX_DATA_SIZE)
-            if raw:
-                return data
-
-            return self.Decoder(data)
-
+            return data if raw else self.Decoder(data)
         except IOError:
             return default
 
@@ -382,14 +378,14 @@ class DirectoryIOManager(IOManager):
         """
         if self.ValidateInventory():
             path = self.GetAbsolutePathName(path)
-            return os.access(path, os.R_OK) or os.access(path + ".gz", os.R_OK)
+            return os.access(path, os.R_OK) or os.access(f"{path}.gz", os.R_OK)
         return False
 
     def Metadata(self, path):
         path = self.GetAbsolutePathName(path)
         try:
             try:
-                st = os.stat(path + ".gz")
+                st = os.stat(f"{path}.gz")
             except OSError:
                 if os.path.isdir(path):
                     return {}
@@ -408,7 +404,7 @@ class DirectoryIOManager(IOManager):
             self.EnsureDirectoryExists(self.dump_dir)
 
         if not os.path.isdir(dump_dir):
-            raise IOManagerError("%s is not a directory" % self.dump_dir)
+            raise IOManagerError(f"{self.dump_dir} is not a directory")
 
     def GetAbsolutePathName(self, name):
         path = os.path.normpath(
@@ -440,7 +436,7 @@ class DirectoryIOManager(IOManager):
     def Create(self, name):
         path = self.GetAbsolutePathName(name)
         self.EnsureDirectoryExists(os.path.dirname(path))
-        return gzip.open(path + ".gz", "wb")
+        return gzip.open(f"{path}.gz", "wb")
 
     def Destroy(self, name):
         path = self.GetAbsolutePathName(name)
@@ -451,9 +447,9 @@ class DirectoryIOManager(IOManager):
         try:
             result = open(path, "rb")
         except IOError:
-            result = gzip.open(path + ".gz")
+            result = gzip.open(f"{path}.gz")
 
-        self.session.logging.debug("Opened local file %s" % result.name)
+        self.session.logging.debug(f"Opened local file {result.name}")
         return result
 
     def _StoreData(self, name, to_write, **options):
@@ -474,13 +470,13 @@ class DirectoryIOManager(IOManager):
         with gzip.GzipFile(mode="wb", fileobj=fd) as gzip_fd:
             gzip_fd.write(utils.SmartStr(to_write))
 
-        with open(path + ".gz", "wb") as out_fd:
+        with open(f"{path}.gz", "wb") as out_fd:
             out_fd.write(fd.getvalue())
 
         self._dirty = True
 
     def __str__(self):
-        return u"Directory:%s" % self.dump_dir
+        return f"Directory:{self.dump_dir}"
 
 
 # pylint: disable=protected-access
@@ -511,10 +507,9 @@ class ZipFileManager(IOManager):
 
     def __init__(self, urn=None, fd=None, **kwargs):
         super(ZipFileManager, self).__init__(**kwargs)
-        if fd is None and not urn.lower().endswith("zip"):
-            if self.mode == "w":
-                raise IOManagerError(
-                    "Zip files must have the .zip extensions.")
+        if fd is None and not urn.lower().endswith("zip") and self.mode == "w":
+            raise IOManagerError(
+                "Zip files must have the .zip extensions.")
 
         self.fd = fd
         if urn is not None:
@@ -534,10 +529,7 @@ class ZipFileManager(IOManager):
 
         We return a fake one based on the zip file's modification time.
         """
-        result = {}
-        for zipinfo in self.zip.filelist:
-            result[zipinfo.filename] = zipinfo.date_time
-
+        result = {zipinfo.filename: zipinfo.date_time for zipinfo in self.zip.filelist}
         return {
             "$INVENTORY": result
         }
@@ -616,7 +608,7 @@ class ZipFileManager(IOManager):
         self.zip.close()
 
     def __str__(self):
-        return u"ZipFile:%s" % self.file_name
+        return f"ZipFile:{self.file_name}"
 
 
 class URLManager(IOManager):
@@ -625,13 +617,11 @@ class URLManager(IOManager):
     def __init__(self, urn=None, mode="r", **kwargs):
         super(URLManager, self).__init__(urn=urn, mode=mode, **kwargs)
         if mode != "r":
-            raise IOManagerError("%s supports only reading." %
-                                 self.__class__.__name__)
+            raise IOManagerError(f"{self.__class__.__name__} supports only reading.")
 
         self.url = urllib.parse.urlparse(utils.SmartUnicode(urn))
         if self.url.scheme not in ("http", "https"):
-            raise IOManagerError("%s supports only http protocol." %
-                                 self.__class__.__name__)
+            raise IOManagerError(f"{self.__class__.__name__} supports only http protocol.")
 
     def Create(self, name):
         _ = name
@@ -642,8 +632,7 @@ class URLManager(IOManager):
         raise IOManagerError("Write support to http is not supported.")
 
     def _GetURL(self, name):
-        url = self.url._replace(path="%s/%s/%s" % (
-            self.url.path, self.version, name))
+        url = self.url._replace(path=f"{self.url.path}/{self.version}/{name}")
         return urllib.parse.urlunparse(url)
 
     def Open(self, name):
@@ -652,16 +641,16 @@ class URLManager(IOManager):
         try:
             # Rekall repositories always use gzip to compress the files - so
             # first try with the .gz extension.
-            fd = urllib.request.urlopen(url + ".gz", timeout=10)
-            self.session.logging.debug("Opened url %s.gz" % url)
+            fd = urllib.request.urlopen(f"{url}.gz", timeout=10)
+            self.session.logging.debug(f"Opened url {url}.gz")
             return gzip.GzipFile(fileobj=io.BytesIO(fd.read(MAX_DATA_SIZE)))
         except urllib.error.HTTPError:
             # Try to load the file without the .gz extension.
-            self.session.logging.debug("Opened url %s" % url)
+            self.session.logging.debug(f"Opened url {url}")
             return urllib.request.urlopen(url, timeout=10)
 
     def __str__(self):
-        return u"URL:%s" % self.urn
+        return f"URL:{self.urn}"
 
 
 def Factory(urn, mode="r", session=None, **kwargs):
@@ -672,5 +661,4 @@ def Factory(urn, mode="r", session=None, **kwargs):
         except IOError:
             pass
 
-    raise IOManagerError(
-        "Unable to find any managers which can work on %s" % urn)
+    raise IOManagerError(f"Unable to find any managers which can work on {urn}")

@@ -64,11 +64,9 @@ class LinHistoryScanner(scan.PointerScanner):
             timestamp_relative_offset = self.profile.get_obj_offset(
                 "_hist_entry", "timestamp")
 
-            hist_entry = self.profile._hist_entry(
-                offset=hit - timestamp_relative_offset,
-                vm=self.address_space)
-
-            yield hist_entry
+            yield self.profile._hist_entry(
+                offset=hit - timestamp_relative_offset, vm=self.address_space
+            )
 
 
 class HeapHistoryScanner(common.HeapScannerMixIn, LinHistoryScanner):
@@ -168,8 +166,7 @@ class BashHistory(common.LinProcessFilter):
             if not timestamps:
                 continue
 
-            yield dict(divider="Task: %s (%s)" % (task.name,
-                                                  task.pid))
+            yield dict(divider=f"Task: {task.name} ({task.pid})")
 
 
             if self.plugin_args.scan_entire_address_space:

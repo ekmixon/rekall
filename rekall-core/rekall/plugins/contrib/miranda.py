@@ -116,9 +116,9 @@ class HeapScannerMixin(object):
         for vad in task.RealVadRoot.traverse():
             if vad.u.VadFlags.ProtectionEnum == "READWRITE":
                 # Only scan the VAD region.
-                for match in super(HeapScannerMixin, self).scan(
-                        vad.Start, vad.Length):
-                    yield match
+                yield from super(HeapScannerMixin, self).scan(
+                    vad.Start, vad.Length
+                )
 
 class HeapScanner(HeapScannerMixin, scan.MultiStringScanner):
     pass
@@ -136,10 +136,7 @@ class Miranda(common.WindowsCommandPlugin):
             session=self.session,
             needles=[b"\xba\xba\xba\xabIRC_1\x00"])
 
-        irc_hits = []
-        for hit, _ in scanner.scan():
-            irc_hits.append(hit)
-
+        irc_hits = [hit for hit, _ in scanner.scan()]
         scanner = HeapPointerScanner(
             session=self.session,
             profile=self.session.profile, pointers=[x+4 for x in irc_hits])
@@ -159,9 +156,10 @@ class Miranda(common.WindowsCommandPlugin):
                 renderer.section("Channel {0} {1:#x}".format(
                     channel.Channel, channel))
 
-                users = []
-                for x in channel.FirstUser.walk_list("NextUser", True):
-                    users.append(utils.SmartUnicode(x.Nick.deref()))
+                users = [
+                    utils.SmartUnicode(x.Nick.deref())
+                    for x in channel.FirstUser.walk_list("NextUser", True)
+                ]
 
                 renderer.table_header([("Users", "users", "120")])
                 renderer.table_row(",".join(users))

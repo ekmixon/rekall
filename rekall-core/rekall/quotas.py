@@ -53,7 +53,7 @@ def wrap_session(session, cpu_quota=None, load_quota=None):
     if cpu_quota is None:
         cpu_quota = session.GetParameter("cpu_quota")
 
-    if cpu_quota == None and load_quota == None:
+    if cpu_quota is None and load_quota is None:
         return session
 
     # Store the process's current CPU utilization.
@@ -86,8 +86,10 @@ def check_quota(state, cpu_quota, load_quota):
         current = cpu_times.user + cpu_times.system
         if cpu_quota and current > start_time + cpu_quota:
             # CPU quota exceeded.
-            raise plugin.PluginError("CPU Quota exceeded (%s Seconds)." %
-                                     (current - start_time))
+            raise plugin.PluginError(
+                f"CPU Quota exceeded ({current - start_time} Seconds)."
+            )
+
 
         if load_quota:
             while 1:

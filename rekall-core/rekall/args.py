@@ -62,7 +62,7 @@ class RekallArgParser(argparse.ArgumentParser):
 
     def __init__(self, session=None, **kwargs):
         kwargs["formatter_class"] = RekallHelpFormatter
-        if session == None:
+        if session is None:
             raise RuntimeError("Session must be set")
         self.session = session
         super(RekallArgParser, self).__init__(**kwargs)
@@ -80,10 +80,9 @@ class RekallArgParser(argparse.ArgumentParser):
     def parse_known_args(self, args=None, namespace=None, force=False, **_):
         self.ignore_errors = force
 
-        result = super(RekallArgParser, self).parse_known_args(
-            args=args, namespace=namespace)
-
-        return result
+        return super(RekallArgParser, self).parse_known_args(
+            args=args, namespace=namespace
+        )
 
     def print_help(self, file=None):
         if self.ignore_errors:
@@ -287,7 +286,9 @@ def ConfigureCommandLineParser(command_metadata, parser, critical=False):
 
     if command_metadata.plugin_cls:
         groups[command_metadata.plugin_cls.name] = parser.add_argument_group(
-            "Plugin %s options" % command_metadata.plugin_cls.name)
+            f"Plugin {command_metadata.plugin_cls.name} options"
+        )
+
 
     for name, options in six.iteritems(command_metadata.args):
         # We need to modify options to feed into argparse.
@@ -298,7 +299,7 @@ def ConfigureCommandLineParser(command_metadata, parser, critical=False):
             options["help"] = argparse.SUPPRESS
 
         # Prevent None getting into the kwargs because it upsets argparser.
-        kwargs = dict((k, v) for k, v in six.iteritems(options) if v is not None)
+        kwargs = {k: v for k, v in six.iteritems(options) if v is not None}
         name = kwargs.pop("name", None) or name
 
         # If default is specified we assume the parameter is not required.
@@ -331,12 +332,11 @@ def ConfigureCommandLineParser(command_metadata, parser, critical=False):
             if not required:
                 kwargs["nargs"] = "?"
 
-        # Otherwise argparse wants to have - in front of the arg.
         else:
             if short_opt:
-                positional_args.append("-" + short_opt)
+                positional_args.append(f"-{short_opt}")
 
-            positional_args.append("--" + name)
+            positional_args.append(f"--{name}")
 
         arg_type = kwargs.pop("type", None)
         choices = kwargs.pop("choices", [])
@@ -357,14 +357,13 @@ def ConfigureCommandLineParser(command_metadata, parser, critical=False):
         elif arg_type == "Float":
             kwargs["type"] = float
 
-        elif arg_type == "Boolean" or arg_type == "Bool":
+        elif arg_type in ["Boolean", "Bool"]:
             # Argparse will assume default False for flags and not return
             # None, which is required by ApplyDefaults to recognize an unset
             # argument. To solve this issue, we just pass the default on.
             kwargs["default"] = default
             kwargs["action"] = "store_true"
 
-        # Multiple entries of choices (requires a choices paramter).
         elif arg_type == "ChoiceArray":
             kwargs["nargs"] = "+" if required else "*"
             kwargs["choices"] = list(choices)
@@ -432,7 +431,9 @@ def parse_args(argv=None, user_session=None, global_arg_cb=None):
     command_metadata = user_session.plugins.Metadata(plugin_name)
     if not command_metadata:
         raise plugin.PluginError(
-            "Plugin %s is not available for this configuration" % plugin_name)
+            f"Plugin {plugin_name} is not available for this configuration"
+        )
+
 
     # Configure the arg parser for this command's options.
     plugin_cls = command_metadata.plugin_cls
@@ -462,10 +463,9 @@ class IntParser(argparse.Action):
     def parse_int(self, value):
         # Support suffixes
         multiplier = 1
-        m = re.search("(.*)(Mb|mb|kb|m|M|k|g|G|Gb)", value)
-        if m:
-            value = m.group(1)
-            suffix = m.group(2).lower()
+        if m := re.search("(.*)(Mb|mb|kb|m|M|k|g|G|Gb)", value):
+            value = m[1]
+            suffix = m[2].lower()
             if suffix in ("gb", "g"):
                 multiplier = 1024 * 1024 * 1024
             elif suffix in ("mb", "m"):
@@ -523,6 +523,6 @@ class ArrayStringParser(argparse.Action):
             values = [values]
 
         for value in values:
-            result.extend([x for x in value.split(",")])
+            result.extend(list(value.split(",")))
 
         setattr(namespace, self.dest, result)

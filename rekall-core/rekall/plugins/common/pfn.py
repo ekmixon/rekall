@@ -71,12 +71,12 @@ class VADMapMixin(object):
             result = "Invalid PTE "
 
         if "filename" in metadata:
-            result += "%s " % metadata["filename"]
+            result += f'{metadata["filename"]} '
 
         if "number" in metadata:
-            result = "PF %s " % metadata["number"]
+            result = f'PF {metadata["number"]} '
 
-        if type == "Valid" or type == "Transition":
+        if type in ["Valid", "Transition"]:
             result += "PhysAS "
 
         if offset:

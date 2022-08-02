@@ -158,10 +158,7 @@ class Curry(object):
             return self._default_arguments
 
         args, _, _, defaults = inspect.getargspec(self._target)
-        if defaults:
-            return args[-len(defaults):]
-
-        return []
+        return args[-len(defaults):] if defaults else []
 
     def __getattr__(self, attr):
         return getattr(self._target, attr)
@@ -206,7 +203,7 @@ class NoneObject(with_metaclass(registry.UniqueObjectIdMetaclass, object)):
             return self.reason.format(*self.args)
 
     def __repr__(self):
-        return u"<%s>" % self.FormatReason()
+        return f"<{self.FormatReason()}>"
 
     def __setitem__(self, item, other):
         return
@@ -520,7 +517,7 @@ class BaseObject(with_metaclass(registry.UniqueObjectIdMetaclass, object)):
     def __repr__(self):
         # Is this a prototype? (See profile.GetPrototype for explanation.)
         if self.obj_offset == 0 and self.obj_name == "Prototype":
-            return "%s Prototype" % self.__class__.__name__
+            return f"{self.__class__.__name__} Prototype"
 
         return "[{0} {1}] @ 0x{2:08X}".format(
             self.__class__.__name__, self.obj_name,
@@ -528,9 +525,7 @@ class BaseObject(with_metaclass(registry.UniqueObjectIdMetaclass, object)):
 
     def __dir__(self):
         """Hide any members with _."""
-        result = list(self.__dict__) + dir(self.__class__)
-
-        return result
+        return list(self.__dict__) + dir(self.__class__)
 
     def __format__(self, formatspec):
         if not formatspec:
@@ -872,14 +867,20 @@ class Pointer(NativeType):
                             self.obj_profile.Object(self.target).obj_size)
 
         offset = self.obj_offset + int(other) * self.target_size
-        if not self.obj_vm.is_valid_address(offset):
-            return NoneObject("Invalid offset")
-
-        return self.__class__(
-            target=self.target, target_args=self.target_args,
-            offset=offset, vm=self.obj_vm,
-            parent=self.obj_parent, session=self.obj_session,
-            context=self.obj_context, profile=self.obj_profile)
+        return (
+            self.__class__(
+                target=self.target,
+                target_args=self.target_args,
+                offset=offset,
+                vm=self.obj_vm,
+                parent=self.obj_parent,
+                session=self.obj_session,
+                context=self.obj_context,
+                profile=self.obj_profile,
+            )
+            if self.obj_vm.is_valid_address(offset)
+            else NoneObject("Invalid offset")
+        )
 
     def __sub__(self, other):
         if isinstance(other, Pointer):
@@ -903,17 +904,13 @@ class Pointer(NativeType):
         target = self.v()
         target_name = self.obj_session.address_resolver.format_address(
             target)
-        if target_name:
-            target_name = " (%s)" % target_name[0]
-        else:
-            target_name = ""
-
+        target_name = f" ({target_name[0]})" if target_name else ""
         return "<%s %s to [%#010x%s] (%s)>" % (
             self.target, self.__class__.__name__, target,
             target_name, self.obj_name or '')
 
     def __str__(self):
-        return u"Pointer to %s" % self.deref()
+        return f"Pointer to {self.deref()}"
 
     @utils.safe_property
     def indices(self):
@@ -1104,11 +1101,7 @@ class Array(BaseObject):
         if not other or self.count != len(other):
             return False
 
-        for i in range(self.count):
-            if not self[i] == other[i]:
-                return False
-
-        return True
+        return all(self[i] == other[i] for i in range(self.count))
 
     def __getitem__(self, pos):
         # Check for slice object
@@ -1119,7 +1112,7 @@ class Array(BaseObject):
         pos = int(pos)
         offset = self.target_size * pos + self.obj_offset
         context = dict(index=pos)
-        context.update(self.obj_context)
+        context |= self.obj_context
 
         return self.obj_profile.Object(
             self.target, offset=offset, vm=self.obj_vm,
@@ -1222,14 +1215,11 @@ class LinkedListArray(Array):
 
         count += 1
 
-        while 1:
-            # Exit conditions.
-            if self.maximum_offset and offset > self.maximum_offset:
-                break
-
-            if self.count and count >= self.count:
-                break
-
+        while (
+            1
+            and not (self.maximum_offset and offset > self.maximum_offset)
+            and not (self.count and count >= self.count)
+        ):
             if count >= self.max_count:
                 self.obj_session.logging.warn(
                     "%s ListArray iteration truncated by max_count!",
@@ -1377,7 +1367,7 @@ class Struct(BaseAddressComparisonMixIn, BaseObject):
 
     def __repr__(self):
         if self.obj_offset == 0 and self.obj_name == "Prototype":
-            return "%s Prototype" % self.__class__.__name__
+            return f"{self.__class__.__name__} Prototype"
 
         return "[{0} {1}] @ 0x{2:08X}".format(
             self.obj_type, self.obj_name or '', self.obj_offset)
@@ -1391,7 +1381,7 @@ class Struct(BaseAddressComparisonMixIn, BaseObject):
         for k in set(self.members).union(self.callable_members):
             width_name = max(width_name, len(k))
             obj = getattr(self, k)
-            if obj == None:
+            if obj is None:
                 obj = self.m(k)
 
             fields.append(
@@ -1446,17 +1436,16 @@ class Struct(BaseAddressComparisonMixIn, BaseObject):
             return result
 
         element = self.members.get(attr)
-        if element is not None:
-            # Allow the element to be a callable rather than a list - this is
-            # useful for aliasing member names
-            if callable(element):
-                return element(self)
-
-            offset, cls = element
-        else:
+        if element is None:
             return NoneObject(u"Struct {0} has no member {1}",
                               self.obj_name, attr)
 
+        # Allow the element to be a callable rather than a list - this is
+        # useful for aliasing member names
+        if callable(element):
+            return element(self)
+
+        offset, cls = element
         if callable(offset):
             # If offset is specified as a callable its an absolute
             # offset
@@ -1493,7 +1482,7 @@ class Struct(BaseAddressComparisonMixIn, BaseObject):
 
     def __getattr__(self, attr):
         result = self.m(attr)
-        if result == None:
+        if result is None:
             raise AttributeError(attr)
 
         return result
@@ -1504,7 +1493,7 @@ class Struct(BaseAddressComparisonMixIn, BaseObject):
         # Try to make the member write the new value.
         member.write(value)
         if not hasattr(member, 'write') or not member.write(value):
-            raise ValueError("Error writing value to member " + attr)
+            raise ValueError(f"Error writing value to member {attr}")
 
     def walk_list(self, list_member, include_current=True, deref_as=None):
         """Walk a single linked list in this struct.
@@ -1518,9 +1507,7 @@ class Struct(BaseAddressComparisonMixIn, BaseObject):
         if include_current:
             yield self
 
-        seen = set()
-        seen.add(self.obj_offset)
-
+        seen = {self.obj_offset}
         item = self
         while True:
             if deref_as:
@@ -1590,16 +1577,17 @@ class MetadataProfileSectionLoader(ProfileSectionLoader):
                 break
 
         if profile_cls is None:
-            session.logging.warn("No profile implementation class %s" %
-                                 metadata["ProfileClass"])
+            session.logging.warn(
+                f'No profile implementation class {metadata["ProfileClass"]}'
+            )
+
 
             raise ProfileError(
-                "No profile implementation class %s" %
-                metadata["ProfileClass"])
+                f'No profile implementation class {metadata["ProfileClass"]}'
+            )
 
-        result = profile_cls(session=session, metadata=metadata)
 
-        return result
+        return profile_cls(session=session, metadata=metadata)
 
 
 class ConstantProfileSectionLoader(ProfileSectionLoader):
@@ -1874,7 +1862,7 @@ class Profile(with_metaclass(registry.MetaclassRegistry, object)):
         self.object_classes.update(other.object_classes)
         self.flush_cache()
         self.enums.update(other.enums)
-        self.name = u"%s + %s" % (self.name, other.name)
+        self.name = f"{self.name} + {other.name}"
 
         # Merge in the other's profile metadata which is not in this profile.
         metadata = other._metadata.copy()  # pylint: disable=protected-access
@@ -1905,7 +1893,7 @@ class Profile(with_metaclass(registry.MetaclassRegistry, object)):
     def metadatas(self, *args):
         """Obtain metadata about this profile."""
         self.EnsureInitialized()
-        return tuple([self._metadata.get(x) for x in args])
+        return tuple(self._metadata.get(x) for x in args)
 
     def has_type(self, type_name):
         # Make sure we are initialized on demand.
@@ -2038,14 +2026,11 @@ class Profile(with_metaclass(registry.MetaclassRegistry, object)):
                 if callable(v):
                     callable_members[utils.intern_str(k)] = v
 
-                    # If the callable is masking an existing field, revert back
-                    # to it.
-                    original_v = original_type_descriptor[1].get(k)
-                    if original_v:
+                    if original_v := original_type_descriptor[1].get(k):
                         members[utils.intern_str(k)] = (
                             original_v[0], self.list_to_type(k, original_v[1]))
 
-                elif v[0] == None:
+                elif v[0] is None:
                     self.session.logging.warning(
                         "%s has no offset in object %s. Check that vtypes "
                         "has a concrete definition for it.",
@@ -2108,7 +2093,7 @@ class Profile(with_metaclass(registry.MetaclassRegistry, object)):
                     try:
                         return cb(self)
                     except Exception as e:
-                        return NoneObject("Failed to run callback %s" % e)
+                        return NoneObject(f"Failed to run callback {e}")
 
                 getter = CbGetter
 
@@ -2154,20 +2139,17 @@ class Profile(with_metaclass(registry.MetaclassRegistry, object)):
             target = typeList[0]
             target_args = {}
 
-        # This is of the form [ 'pointer' , [ 'foobar' ]]
-        # Target is the first item, args is the second item.
-        elif typeList[0] == 'pointer' or typeList[0] == 'pointer64':
+        elif typeList[0] in ['pointer', 'pointer64']:
             target = "Pointer"
             target_args = self.legacy_field_descriptor(typeList[1])
 
-        # This is an array: [ 'array', count, ['foobar'] ]
         elif typeList[0] == 'array':
             target = "Array"
             target_args = self.legacy_field_descriptor(typeList[2])
             target_args['count'] = typeList[1]
 
         elif len(typeList) > 2:
-            self.session.logging.error("Invalid typeList %s" % (typeList,))
+            self.session.logging.error(f"Invalid typeList {typeList}")
 
         else:
             target = typeList[0]
@@ -2285,11 +2267,10 @@ class Profile(with_metaclass(registry.MetaclassRegistry, object)):
 
         # Check the overlay and type descriptor for sanity.
         if len(overlay) != 2 or not isinstance(overlay[1], dict):
-            raise RuntimeError("Overlay error: Invalid overlay %s" % overlay)
+            raise RuntimeError(f"Overlay error: Invalid overlay {overlay}")
 
         if len(type_member) != 2 or not isinstance(type_member[1], dict):
-            raise RuntimeError("VType error: Invalid type descriptor %s" %
-                               type_member)
+            raise RuntimeError(f"VType error: Invalid type descriptor {type_member}")
 
         # Allow the overlay to override the struct size.
         if overlay[0] is None:
@@ -2347,12 +2328,13 @@ class Profile(with_metaclass(registry.MetaclassRegistry, object)):
 
         # Check the overlay and type descriptor for sanity.
         if len(field_overlay) != 2 or not isinstance(field_overlay[1], list):
-            raise RuntimeError(
-                "Overlay error: Invalid overlay %s" % field_overlay)
+            raise RuntimeError(f"Overlay error: Invalid overlay {field_overlay}")
 
         if len(field_member) != 2 or not isinstance(field_member[1], list):
-            raise RuntimeError("VType error: Invalid field type descriptor %s" %
-                               field_member)
+            raise RuntimeError(
+                f"VType error: Invalid field type descriptor {field_member}"
+            )
+
 
         offset, field_description = field_member
         if field_overlay[0] is None:
@@ -2379,8 +2361,7 @@ class Profile(with_metaclass(registry.MetaclassRegistry, object)):
             result = result()
 
         if result is None:
-            result = NoneObject(
-                "Constant %s does not exist in profile." % constant)
+            result = NoneObject(f"Constant {constant} does not exist in profile.")
 
         elif is_address:
             result = Pointer.integer_to_address(result)
@@ -2397,7 +2378,7 @@ class Profile(with_metaclass(registry.MetaclassRegistry, object)):
 
         if target is None:
             if constant not in self.constant_types:
-                raise TypeError("Unknown constant type for %s" % constant)
+                raise TypeError(f"Unknown constant type for {constant}")
 
             # target_args are optional in the profile specification.
             try:
@@ -2405,14 +2386,13 @@ class Profile(with_metaclass(registry.MetaclassRegistry, object)):
             except ValueError:
                 target = self.constant_types[constant][0]
 
-        kwargs.update(target_args or {})
+        kwargs |= (target_args or {})
         offset = self.get_constant(constant, is_address=True)
-        if not offset:
-            return offset
-
-        result = self.Object(target, profile=self, offset=offset, vm=vm,
-                             **kwargs)
-        return result
+        return (
+            self.Object(target, profile=self, offset=offset, vm=vm, **kwargs)
+            if offset
+            else offset
+        )
 
     def get_constant_by_address(self, address):
         self.EnsureInitialized()
@@ -2420,10 +2400,7 @@ class Profile(with_metaclass(registry.MetaclassRegistry, object)):
         address = Pointer.integer_to_address(address)
 
         lowest_eq, name = self.get_nearest_constant_by_address(address)
-        if lowest_eq != address:
-            return NoneObject("Constant not found")
-
-        return name
+        return NoneObject("Constant not found") if lowest_eq != address else name
 
     def get_nearest_constant_by_address(self, address, below=True):
         """Returns the closest constant below or equal to the address."""
@@ -2448,14 +2425,8 @@ class Profile(with_metaclass(registry.MetaclassRegistry, object)):
 
     @registry.memoize_method
     def get_enum(self, enum_name):
-        result = self.enums.get(enum_name)
-
-        # Enum keys are encoded into strings for JSON compatibility,
-        # but callers do not expect this, so convert to int on
-        # returning the enum.
-        if result:
-            return dict(
-                (int(x), y) for x, y in six.iteritems(result))
+        if result := self.enums.get(enum_name):
+            return {int(x): y for x, y in six.iteritems(result)}
 
     def get_reverse_enum(self, enum_name, field=None):
         result = self.reverse_enums.get(enum_name)
@@ -2481,7 +2452,7 @@ class Profile(with_metaclass(registry.MetaclassRegistry, object)):
         self.compile_type(attr)
 
         if self.types[attr] is None and attr not in self.object_classes:
-            raise AttributeError("No such vtype: %s" % attr)
+            raise AttributeError(f"No such vtype: {attr}")
 
         return Curry(self.Object, attr)
 
@@ -2511,8 +2482,7 @@ class Profile(with_metaclass(registry.MetaclassRegistry, object)):
 
         # Ensure we are called correctly.
         if name.__class__ not in (str, unicode):
-            raise ValueError(
-                "Type name must be a string, not %s" % name.__class__)
+            raise ValueError(f"Type name must be a string, not {name.__class__}")
 
         if offset is None:
             offset = 0
@@ -2565,8 +2535,7 @@ class Profile(with_metaclass(registry.MetaclassRegistry, object)):
                               type_name, self)
 
     def __str__(self):
-        return u"<%s profile %s (%s)>" % (
-            self.metadata("arch"), self.name, self.__class__.__name__)
+        return f'<{self.metadata("arch")} profile {self.name} ({self.__class__.__name__})>'
 
     def __repr__(self):
         return str(self)

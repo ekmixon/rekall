@@ -54,7 +54,7 @@ class JSONCollectionImpl(collections.JSONCollection):
 
             return self.tables[0]
 
-        raise RuntimeError("Unknown table %s" % table)
+        raise RuntimeError(f"Unknown table {table}")
 
     def sanitize_row(self, row, table=None):
         """Convert the row into primitives.

@@ -78,24 +78,25 @@ class DarwinNetstat(common.AbstractDarwinCommand):
         """Return the names of available socket enumeration methods."""
         # Find all the producers that collect procs and inherit from
         # AbstractDarwinCachedProducer.
-        methods = []
-        for subclass in common.AbstractDarwinProducer.classes.values():
-            # We look for a plugin which is a producer and a darwin command.
-            if (issubclass(subclass, common.AbstractDarwinCommand) and
-                    issubclass(subclass, plugin.Producer) and
-                    subclass.type_name == "socket"):
-                methods.append(subclass.name)
+        methods = [
+            subclass.name
+            for subclass in common.AbstractDarwinProducer.classes.values()
+            if (
+                issubclass(subclass, common.AbstractDarwinCommand)
+                and issubclass(subclass, plugin.Producer)
+                and subclass.type_name == "socket"
+            )
+        ]
+
         methods.sort()
 
         return methods
 
     @registry.classproperty
     @registry.memoize
-    def table_header(cls):  # pylint: disable=no-self-argument
+    def table_header(self):  # pylint: disable=no-self-argument
         header = [dict(name="socket", type="socket", width=60)]
-        for method in cls.methods():
-            header.append(dict(name=method, width=12))
-
+        header.extend(dict(name=method, width=12) for method in self.methods())
         return plugin.PluginHeader(*header)
 
     def collect(self):
@@ -104,9 +105,7 @@ class DarwinNetstat(common.AbstractDarwinCommand):
         for socket in sorted(self.session.plugins.collect("socket"),
                              key=lambda socket: socket.last_pid):
             row = [socket]
-            for method in methods:
-                row.append(method in socket.obj_producers)
-
+            row.extend(method in socket.obj_producers for method in methods)
             yield row
 
 

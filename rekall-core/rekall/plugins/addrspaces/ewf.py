@@ -53,15 +53,12 @@ class EWFAddressSpace(addrspace.CachingAddressSpaceMixIn,
         self.ewf_file = ewf.EWFFile(
             session=self.session, address_space=self.base)
 
-        self.name = "%s (EWF)" % self.base.name
+        self.name = f"{self.base.name} (EWF)"
         self.fname = getattr(self.base, "fname", "")
 
     def cached_read_partial(self, offset, length):
         """Implement our own read method for caching."""
-        res = ""
-        if offset != None:
-            res = self.ewf_file.read(offset, length)
-
+        res = self.ewf_file.read(offset, length) if offset != None else ""
         if len(res) < length:
             to_read = length - len(res)
             data = addrspace.ZEROER.GetZeros(to_read)

@@ -224,7 +224,7 @@ class WindowsHiberFileSpace(addrspace.BaseAddressSpace):
     order = 100
 
     def __init__(self, **kwargs):
-        self.as_assert(self.base == None, "No base Address Space")
+        self.as_assert(self.base is None, "No base Address Space")
         self.as_assert(self.base.read(0, 4).lower() in ["hibr", "wake"])
         self.runs = []
         self.PageDict = {}
@@ -302,10 +302,10 @@ class WindowsHiberFileSpace(addrspace.BaseAddressSpace):
                                          start * 0x1000,  # physical address
                                          LocalPageCnt * 0x1000))
 
-                for j in range(0, LocalPageCnt):
+                for j in range(LocalPageCnt):
                     if (XpressIndex and ((XpressIndex % 0x10) == 0)):
                         XpressHeader, XpressBlockSize = \
-                                      self.next_xpress(XpressHeader, XpressBlockSize)
+                                          self.next_xpress(XpressHeader, XpressBlockSize)
 
                     PageNumber = start + j
                     XpressPage = XpressIndex % 0x10
@@ -344,13 +344,10 @@ class WindowsHiberFileSpace(addrspace.BaseAddressSpace):
 
     def convert_to_raw(self, ofile):
         page_count = 0
-        for _i, xb in enumerate(self.PageDict.keys()):
+        for xb in self.PageDict.keys():
             size = self.PageDict[xb][0][1]
             data_z = self.base.read(xb + 0x20, size)
-            if size == 0x10000:
-                data_uz = data_z
-            else:
-                data_uz = xpress.xpress_decode(data_z)
+            data_uz = data_z if size == 0x10000 else xpress.xpress_decode(data_z)
             for page, size, offset in self.PageDict[xb]:
                 ofile.seek(page * 0x1000)
                 ofile.write(data_uz[offset * 0x1000:offset * 0x1000 + 0x1000])
@@ -360,7 +357,7 @@ class WindowsHiberFileSpace(addrspace.BaseAddressSpace):
 
     def next_xpress(self, XpressHeader, XpressBlockSize):
         XpressHeaderOffset = int(XpressBlockSize) + XpressHeader.obj_offset + \
-            XpressHeader.size()
+                XpressHeader.size()
 
         ## We only search this far
         BLOCKSIZE = 1024
@@ -394,9 +391,7 @@ class WindowsHiberFileSpace(addrspace.BaseAddressSpace):
         Size = Size >> 10
         Size = Size + 1
 
-        if ((Size % 8) == 0):
-            return Size
-        return (Size & ~7) + 8
+        return Size if ((Size % 8) == 0) else (Size & ~7) + 8
 
     def get_header(self):
         return self.header
@@ -498,8 +493,7 @@ class WindowsHiberFileSpace(addrspace.BaseAddressSpace):
             result += data
 
         if result == '':
-            result = obj.NoneObject("Unable to read data at %s for length %s." % (
-                    addr, length))
+            result = obj.NoneObject(f"Unable to read data at {addr} for length {length}.")
 
         return result
 
@@ -507,15 +501,18 @@ class WindowsHiberFileSpace(addrspace.BaseAddressSpace):
         _baseaddr = self.get_addr(addr)
         string = self.read(addr, 4)
         if not string:
-            return obj.NoneObject("Could not read long at %s" % addr)
+            return obj.NoneObject(f"Could not read long at {addr}")
         (longval,) = struct.unpack('=I', string)
         return longval
 
     def get_available_pages(self):
         page_list = []
-        for _i, xb in enumerate(self.PageDict.keys()):
-            for page, _size, _offset in self.PageDict[xb]:
-                page_list.append([page * 0x1000, page * 0x1000, 0x1000])
+        for xb in self.PageDict.keys():
+            page_list.extend(
+                [page * 0x1000, page * 0x1000, 0x1000]
+                for page, _size, _offset in self.PageDict[xb]
+            )
+
         return page_list
 
     def get_address_range(self):
@@ -530,8 +527,7 @@ class WindowsHiberFileSpace(addrspace.BaseAddressSpace):
 
     def get_available_addresses(self):
         """ This returns the ranges  of valid addresses """
-        for i in self.AddressList:
-            yield i
+        yield from self.AddressList
 
     def close(self):
         self.base.close()

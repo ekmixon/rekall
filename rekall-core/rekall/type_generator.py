@@ -128,7 +128,7 @@ class Disassembler(DynamicParser):
         self.max_separation = max_separation
 
     def __str__(self):
-        return u"Disassemble %s" % self.start
+        return f"Disassemble {self.start}"
 
     def CompileRule(self, rule):
         """Convert the rule into a regular expression.
@@ -178,10 +178,7 @@ class Disassembler(DynamicParser):
 
     def _FindRuleIndex(self, line):
         for i, rule in enumerate(self.rules):
-            # At every line we check if the current rule can be matched - if
-            # it can then it is a better match.
-            m = rule.search(line)
-            if m:
+            if m := rule.search(line):
                 yield i, m.groupdict()
 
     def _CheckCaptureVariables(self, vector, contexts):
@@ -239,11 +236,8 @@ class Disassembler(DynamicParser):
     def _GetMatch(self, hits, contexts):
         """Find the first vector that matches all the criteria."""
         for vector in self.GenerateVector(hits, [], 0):
-            context = self._CheckCaptureVariables(vector, contexts)
-            if not context:
-                continue
-
-            return (vector, context)
+            if context := self._CheckCaptureVariables(vector, contexts):
+                return (vector, context)
 
         return [], {}
 
@@ -262,10 +256,7 @@ class Disassembler(DynamicParser):
                 yield new_vector
 
             elif level + 1 < len(hits):
-                for result in self.GenerateVector(
-                        hits, new_vector, level+1):
-
-                    yield result
+                yield from self.GenerateVector(hits, new_vector, level + 1)
 
     def _calculate(self, session):
         # Try to cache disassembly to speed things up.
@@ -339,7 +330,7 @@ def GenerateOverlay(session, dynamic_definition):
                 kwargs = kwargs.copy()
                 target = kwargs.pop("target", None)
                 target_args = kwargs.pop("target_args", {})
-                name = "%s.%s" % (type_name, field_name)
+                name = f"{type_name}.{field_name}"
 
                 parsers.append(DynamicParser.classes.get(parser_name)(
                     session=session, name=name, **kwargs))

@@ -75,7 +75,7 @@ def get_vma_for_offset(vmas, offset):
     """
 
     vma = vmas.get_containing_range(offset)
-    return None if vma[0] == None else vma
+    return None if vma[0] is None else vma
 
 
 def get_vma_name_for_regex(vmas, regex):
@@ -116,9 +116,7 @@ def get_mem_range_for_regex(vmas, regex):
     for vm_start, vm_end, vm_data in vmas:
         if re.search(regex, vm_data['name'], re.IGNORECASE):
             if not offsets:
-                offsets = [vm_start]
-                offsets.append(vm_end)
-
+                offsets = [vm_start, vm_end]
             else:
                 if vm_start < offsets[0]:
                     offsets[0] = vm_start
@@ -243,7 +241,7 @@ class HeapAnalysis(common.LinProcessFilter):
 
         thread_stack_offsets = self._get_saved_stack_frame_pointers(task)
         if not thread_stack_offsets:
-            thread_stack_offsets = list()
+            thread_stack_offsets = []
             thread_stack_offsets.append(dict(ebp=0,
                                              esp=0,
                                              pid=task.pid.v()))
@@ -255,9 +253,8 @@ class HeapAnalysis(common.LinProcessFilter):
 
         heap_area = False
         for vma in task.mm.mmap.walk_list("vm_next"):
-            data = dict()
+            data = {'vm_flags': ''.join(vma.vm_flags)}
 
-            data['vm_flags'] = ''.join(vma.vm_flags)
             if vma.vm_file.dereference():
                 data['is_file'] = True
                 fname = task.get_path(vma.vm_file)
@@ -275,9 +272,9 @@ class HeapAnalysis(common.LinProcessFilter):
 
                 # main heap can have 3 or more vm_area_struct structs
                 if vma.vm_start <= task.mm.start_brk <= vma.vm_end or \
-                        (task.mm.start_brk <= vma.vm_start
+                            (task.mm.start_brk <= vma.vm_start
                          < vma.vm_end <= task.mm.brk) or \
-                        vma.vm_start <= task.mm.brk <= vma.vm_end:
+                            vma.vm_start <= task.mm.brk <= vma.vm_end:
                     fname = self._main_heap_identifier
                     heap_area = True
 
@@ -288,10 +285,10 @@ class HeapAnalysis(common.LinProcessFilter):
                              <= vma.vm_end) or
                                 vma.vm_start <= offsets['esp'] <= vma.vm_end):
 
-                            fname = "[stack"
                             pid = offsets['pid']
-                            fname += "]" if task.pid == pid else \
-                                     ":{:d}]".format(pid)
+                            fname = "[stack" + (
+                                "]" if task.pid == pid else ":{:d}]".format(pid)
+                            )
 
                             data['ebp'] = offsets['ebp']
                             data['esp'] = offsets['esp']
@@ -318,9 +315,7 @@ class HeapAnalysis(common.LinProcessFilter):
             major_version = None
             minor_version = None
             match = None
-            libc_filename = get_libc_filename(self.vmas)
-
-            if libc_filename:
+            if libc_filename := get_libc_filename(self.vmas):
                 match = re.search(r'(\d+)\.(\d+)', libc_filename)
 
             # Fallback
@@ -358,12 +353,12 @@ class HeapAnalysis(common.LinProcessFilter):
                 "Repository failed: Now using internal profiles.")
 
             if not self.plugin_args.glibc_version and major_version and \
-                    minor_version:
+                        minor_version:
                 if major_version == 2:
                     if minor_version >= 26:
                         libc_version_string = '226'
 
-                    elif minor_version == 24 or minor_version == 25:
+                    elif minor_version in [24, 25]:
                         libc_version_string = '224'
 
                     elif minor_version == 23:
@@ -489,11 +484,10 @@ class HeapAnalysis(common.LinProcessFilter):
         """Retrieves the PTE entry information for the given address and tests
         whether the page is swapped."""
 
-        for translation_descriptor in self.process_as.describe_vtop(address):
-            if isinstance(translation_descriptor, InvalidAddress):
-                return True
-
-        return False
+        return any(
+            isinstance(translation_descriptor, InvalidAddress)
+            for translation_descriptor in self.process_as.describe_vtop(address)
+        )
 
 
     def _check_and_report_allocated_chunk(
@@ -538,32 +532,29 @@ class HeapAnalysis(common.LinProcessFilter):
                 )
 
             elif chunk not in \
-                    (arena.freed_fast_chunks + arena.freed_tcache_chunks):
+                        (arena.freed_fast_chunks + arena.freed_tcache_chunks):
                 return True
 
-        else:
-            # current chunk seems to be freed, hence its size should equal
-            # next chunk's prev_size
-            if chunk.chunksize() != next_chunk.get_prev_size():
-                self.session.logging.warn(
-                    "Chunk at offset 0x{:x} seems to be freed but its size "
-                    "doesn't match the next chunk's prev_size value."
-                    .format(chunk.v()))
+        elif chunk.chunksize() != next_chunk.get_prev_size():
+            self.session.logging.warn(
+                "Chunk at offset 0x{:x} seems to be freed but its size "
+                "doesn't match the next chunk's prev_size value."
+                .format(chunk.v()))
 
-            elif chunk in \
+        elif chunk in \
                     (arena.freed_fast_chunks + arena.freed_tcache_chunks):
-                # fastbins/tcache chunks normally have the prev_inuse bit set
-                self.session.logging.warn(
-                    "Unexpected: Found fastbin-chunk at offset 0x{0:x} which "
-                    "prev_inuse bit is unset. This shouldn't normally be the "
-                    "case.".format(chunk.v()))
+            # fastbins/tcache chunks normally have the prev_inuse bit set
+            self.session.logging.warn(
+                "Unexpected: Found fastbin-chunk at offset 0x{0:x} which "
+                "prev_inuse bit is unset. This shouldn't normally be the "
+                "case.".format(chunk.v()))
 
-            elif chunk not in arena.freed_chunks:
-                # chunk is not marked as in use, but neither part of any bin
-                # or fastbin
-                self.session.logging.warn(
-                    error_base_string.format("freed", chunk.v(), "not ")
-                )
+        elif chunk not in arena.freed_chunks:
+            # chunk is not marked as in use, but neither part of any bin
+            # or fastbin
+            self.session.logging.warn(
+                error_base_string.format("freed", chunk.v(), "not ")
+            )
 
         return False
 
@@ -602,21 +593,19 @@ class HeapAnalysis(common.LinProcessFilter):
     def get_all_mmapped_chunks(self):
         """Returns all allocated MMAPPED chunks."""
 
-        main_arena = self.get_main_arena()
-        if main_arena:
-            if main_arena.allocated_mmapped_chunks:
-                for chunk in main_arena.allocated_mmapped_chunks:
-                    yield chunk
+        if not (main_arena := self.get_main_arena()):
+            return
+        if main_arena.allocated_mmapped_chunks:
+            yield from main_arena.allocated_mmapped_chunks
+            return
 
-                return
+        main_arena.allocated_mmapped_chunks = []
 
-            main_arena.allocated_mmapped_chunks = list()
-
-            for mmap_first_chunk in main_arena.mmapped_first_chunks:
-                for chunk in self._allocated_chunks_for_mmapped_chunk(
-                        mmap_first_chunk):
-                    main_arena.allocated_mmapped_chunks.append(chunk)
-                    yield chunk
+        for mmap_first_chunk in main_arena.mmapped_first_chunks:
+            for chunk in self._allocated_chunks_for_mmapped_chunk(
+                    mmap_first_chunk):
+                main_arena.allocated_mmapped_chunks.append(chunk)
+                yield chunk
 
 
     def get_aligned_address(self, address, different_align_mask=None):
@@ -706,12 +695,10 @@ class HeapAnalysis(common.LinProcessFilter):
         second last chunk of a heap, when there are more heaps following.
         """
 
-        if chunk.chunksize() <= self._minsize and \
-                (chunk.v() + chunk.chunksize() + (self._size_sz * 2)) == \
-                heap_end:
-            return True
-
-        return False
+        return (
+            chunk.chunksize() <= self._minsize
+            and (chunk.v() + chunk.chunksize() + (self._size_sz * 2)) == heap_end
+        )
 
 
     def _is_bottom_chunk(
@@ -747,8 +734,10 @@ class HeapAnalysis(common.LinProcessFilter):
         if self._front_misalign_correction:
             possible_borders.append(current_border - (self._size_sz * 2))
 
-        if not (chunk.v() + chunk.chunksize() + (self._size_sz * 2)) in \
-                possible_borders:
+        if (
+            chunk.v() + chunk.chunksize() + (self._size_sz * 2)
+            not in possible_borders
+        ):
             # the chunk is not on the edge to the current heap region
 
             if chunk.chunksize() < self._minsize:
@@ -772,13 +761,13 @@ class HeapAnalysis(common.LinProcessFilter):
         #
         # - heap border shouldn't normally exist
         if next_chunk.chunksize() == 0 and next_chunk.prev_inuse() and \
-                (next_chunk.get_prev_size() == chunk.chunksize()) and \
-                not is_last_heap:
+                    (next_chunk.get_prev_size() == chunk.chunksize()) and \
+                    not is_last_heap:
 
             if len(possible_borders) > 1 and chunk.v() + chunk.chunksize() \
-                    + (self._size_sz * 2) == possible_borders[1]:
+                        + (self._size_sz * 2) == possible_borders[1]:
                 self._bottom_chunk_gaps[chunk.v()] = \
-                        self._size_sz * 2
+                            self._size_sz * 2
 
             return True
 
@@ -801,13 +790,11 @@ class HeapAnalysis(common.LinProcessFilter):
             return
 
         if arena.allocated_chunks:
-            for chunk in arena.allocated_chunks:
-                yield chunk
-
+            yield from arena.allocated_chunks
             return
 
         elif self._preserve_chunks:
-            arena.allocated_chunks = list()
+            arena.allocated_chunks = []
 
         heap_count = len(arena.heaps)
 
@@ -830,7 +817,7 @@ class HeapAnalysis(common.LinProcessFilter):
                     break
 
                 elif (curr_chunk.v() + curr_chunk.chunksize()) <= \
-                        curr_chunk.v():
+                            curr_chunk.v():
                     self.session.logging.warn(
                         "The chunk at offset 0x{:x} has a size <= 0, which "
                         "is unexpected and indicates a problem. Since we can't"
@@ -874,7 +861,7 @@ class HeapAnalysis(common.LinProcessFilter):
                 curr_chunk = next_chunk
 
             if not hit_heap_bottom and \
-                    (last_chunk.v() + last_chunk.chunksize()) < current_border:
+                        (last_chunk.v() + last_chunk.chunksize()) < current_border:
                 self.session.logging.warn(
                     "Seems like we didn't hit the top chunk or the bottom of "
                     "the current heap at offset: 0x{0:x}".format(heap.v()))
@@ -888,49 +875,47 @@ class HeapAnalysis(common.LinProcessFilter):
         arena = self.get_main_arena()
 
         if arena.allocated_chunks:
-            for chunk in arena.allocated_chunks:
-                yield chunk
-
+            yield from arena.allocated_chunks
         else:
             current_border = 0
             if self._preserve_chunks:
-                arena.allocated_chunks = list()
+                arena.allocated_chunks = []
 
-            if arena.first_chunk and arena.first_chunk.chunksize() > 0:
-                # as the main heap can spread among multiple vm_areas, we take
-                # the system_mem value as the upper boundary
-                if arena.system_mem > 0:
-                    # system_mem includes the potential gap, resulting from
-                    # a different MALLOC_ALIGNMENT, so we subtract
-                    # self._front_misalign_correction
-                    current_border = arena.first_chunk.v() + arena.system_mem \
-                            - self._front_misalign_correction
+            if arena.first_chunk:
+                if arena.first_chunk.chunksize() > 0:
+                    # as the main heap can spread among multiple vm_areas, we take
+                    # the system_mem value as the upper boundary
+                    if arena.system_mem > 0:
+                        # system_mem includes the potential gap, resulting from
+                        # a different MALLOC_ALIGNMENT, so we subtract
+                        # self._front_misalign_correction
+                        current_border = arena.first_chunk.v() + arena.system_mem \
+                                    - self._front_misalign_correction
 
-                # there have been rare scenarios, in which the system_mem
-                # value was 0
-                else:
-                    self.session.logging.warn(
-                        "Unexpected: system_mem value of main arena is <= 0. "
-                        "We will calculate it with the top chunk. This will "
-                        "lead to follow up warnings regarding size "
-                        "inconsistencies.")
-                    current_border = arena.top.v() + arena.top.chunksize()
-
-                last_chunk = None
-                curr_chunk = None
-
-                for next_chunk in arena.first_chunk.next_chunk_generator():
-                    last_chunk = curr_chunk
-                    if not curr_chunk:
-                        curr_chunk = next_chunk
-                        continue
-
-                    if (curr_chunk.v() + curr_chunk.chunksize()) \
-                            == current_border:
-                        # reached top chunk
-                        break
-
+                    # there have been rare scenarios, in which the system_mem
+                    # value was 0
                     else:
+                        self.session.logging.warn(
+                            "Unexpected: system_mem value of main arena is <= 0. "
+                            "We will calculate it with the top chunk. This will "
+                            "lead to follow up warnings regarding size "
+                            "inconsistencies.")
+                        current_border = arena.top.v() + arena.top.chunksize()
+
+                    last_chunk = None
+                    curr_chunk = None
+
+                    for next_chunk in arena.first_chunk.next_chunk_generator():
+                        last_chunk = curr_chunk
+                        if not curr_chunk:
+                            curr_chunk = next_chunk
+                            continue
+
+                        if (curr_chunk.v() + curr_chunk.chunksize()) \
+                                == current_border:
+                            # reached top chunk
+                            break
+
                         if self._check_and_report_allocated_chunk(
                                 arena, curr_chunk, next_chunk, current_border):
 
@@ -939,27 +924,27 @@ class HeapAnalysis(common.LinProcessFilter):
 
                             yield curr_chunk
 
-                    curr_chunk = next_chunk
+                        curr_chunk = next_chunk
 
-                if (last_chunk.v() + last_chunk.chunksize()) < current_border:
-                    self.session.logging.warn("Seems like we didn't hit the "
-                                              "top chunk for main_arena.")
+                    if (last_chunk.v() + last_chunk.chunksize()) < current_border:
+                        self.session.logging.warn("Seems like we didn't hit the "
+                                                  "top chunk for main_arena.")
 
-            elif arena.first_chunk and arena.first_chunk.chunksize() == 0:
-                if not self._libc_offset:
-                    self.session.logging.warn(
-                        "The first main arena chunk seems to have a zero "
-                        "size. As we didn't find a mapped libc module, the "
-                        "reason might be a statically linked executable. "
-                        "Please provide offset for the malloc_par struct "
-                        "(symbol name is 'mp_'). Another reason might be "
-                        "swapped memory pages.")
+                elif arena.first_chunk.chunksize() == 0:
+                    if not self._libc_offset:
+                        self.session.logging.warn(
+                            "The first main arena chunk seems to have a zero "
+                            "size. As we didn't find a mapped libc module, the "
+                            "reason might be a statically linked executable. "
+                            "Please provide offset for the malloc_par struct "
+                            "(symbol name is 'mp_'). Another reason might be "
+                            "swapped memory pages.")
 
-                else:
-                    self.session.logging.warn(
-                        "Unexpected error: The first main arena chunk "
-                        "seems to have a zero size. The reason might be "
-                        "swapped memory pages. Walking the chunks is aborted.")
+                    else:
+                        self.session.logging.warn(
+                            "Unexpected error: The first main arena chunk "
+                            "seems to have a zero size. The reason might be "
+                            "swapped memory pages. Walking the chunks is aborted.")
 
 
     def get_all_allocated_chunks_for_arena(self, arena):
@@ -985,13 +970,10 @@ class HeapAnalysis(common.LinProcessFilter):
             return
 
         if arena.is_main_arena:
-            for i in self._allocated_chunks_for_main_arena():
-                yield i
-
+            yield from self._allocated_chunks_for_main_arena()
         else:
             # not main_arena
-            for chunk in self._allocated_chunks_for_thread_arena(arena):
-                yield chunk
+            yield from self._allocated_chunks_for_thread_arena(arena)
 
 
     # at least the function depends on getting allocated chunks first and then
@@ -999,20 +981,15 @@ class HeapAnalysis(common.LinProcessFilter):
     def get_all_chunks(self):
         """Returns all chunks (allocated, freed and MMAPPED chunks)."""
 
-        for chunk in self.get_all_allocated_chunks():
-            yield chunk
-
-        for freed_chunk in self.get_all_freed_chunks():
-            yield freed_chunk
+        yield from self.get_all_allocated_chunks()
+        yield from self.get_all_freed_chunks()
 
 
     def get_all_allocated_main_chunks(self):
         """Returns all allocated chunks belonging to the main arena (excludes
         thread and MMAPPED chunks)."""
 
-        for chunk in self.get_all_allocated_chunks_for_arena(
-                self.get_main_arena()):
-            yield chunk
+        yield from self.get_all_allocated_chunks_for_arena(self.get_main_arena())
 
 
     def get_all_allocated_thread_chunks(self):
@@ -1021,9 +998,7 @@ class HeapAnalysis(common.LinProcessFilter):
         if self.get_main_arena():
             for arena in self.arenas:
                 if not arena.is_main_arena:
-                    for chunk in self.get_all_allocated_chunks_for_arena(
-                            arena):
-                        yield chunk
+                    yield from self.get_all_allocated_chunks_for_arena(arena)
 
 
     def get_all_allocated_chunks(self):
@@ -1032,11 +1007,8 @@ class HeapAnalysis(common.LinProcessFilter):
 
         if self.get_main_arena():
             for arena in self.arenas:
-                for chunk in self.get_all_allocated_chunks_for_arena(arena):
-                    yield chunk
-
-        for chunk in self.get_all_mmapped_chunks():
-            yield chunk
+                yield from self.get_all_allocated_chunks_for_arena(arena)
+        yield from self.get_all_mmapped_chunks()
 
 
     def get_all_freed_tcache_chunks(self):
@@ -1045,8 +1017,7 @@ class HeapAnalysis(common.LinProcessFilter):
 
         if self.get_main_arena():
             for arena in self.arenas:
-                for free_chunk in arena.freed_tcache_chunks:
-                    yield free_chunk
+                yield from arena.freed_tcache_chunks
 
 
     def get_all_freed_fastbin_chunks(self):
@@ -1055,8 +1026,7 @@ class HeapAnalysis(common.LinProcessFilter):
 
         if self.get_main_arena():
             for arena in self.arenas:
-                for free_chunk in arena.freed_fast_chunks:
-                    yield free_chunk
+                yield from arena.freed_fast_chunks
 
 
     def get_all_freed_bin_chunks(self):
@@ -1064,27 +1034,21 @@ class HeapAnalysis(common.LinProcessFilter):
 
         if self.get_main_arena():
             for arena in self.arenas:
-                for free_chunk in arena.freed_chunks:
-                    yield free_chunk
+                yield from arena.freed_chunks
 
 
     def get_all_freed_chunks(self):
         """Returns all top chunks, freed chunks and freed fastbin chunks and
         tcache chunks, no matter to what arena they belong."""
 
-        if self.get_main_arena():
-            for freed_chunk in self.get_all_freed_fastbin_chunks():
-                yield freed_chunk
-
-            for freed_chunk in self.get_all_freed_tcache_chunks():
-                yield freed_chunk
-
-            for freed_chunk in self.get_all_freed_bin_chunks():
-                yield freed_chunk
-
-            for arena in self.arenas:
-                if arena.top_chunk:
-                    yield arena.top_chunk
+        if not self.get_main_arena():
+            return
+        yield from self.get_all_freed_fastbin_chunks()
+        yield from self.get_all_freed_tcache_chunks()
+        yield from self.get_all_freed_bin_chunks()
+        for arena in self.arenas:
+            if arena.top_chunk:
+                yield arena.top_chunk
 
 
     def _last_heap_for_vma(self, vma):
@@ -1097,9 +1061,10 @@ class HeapAnalysis(common.LinProcessFilter):
 
         for arena in self.arenas:
             for heap in arena.heaps:
-                if vma[0] <= heap.v() < vma[1]:
-                    if not heap_hit or heap.v() > heap_hit.v():
-                        heap_hit = heap
+                if vma[0] <= heap.v() < vma[1] and (
+                    not heap_hit or heap.v() > heap_hit.v()
+                ):
+                    heap_hit = heap
 
         return heap_hit
 
@@ -1111,12 +1076,7 @@ class HeapAnalysis(common.LinProcessFilter):
         if self.get_main_arena:
             ptr_offset = None
 
-            if isinstance(ptr, Number):
-                ptr_offset = ptr
-
-            else:
-                ptr_offset = ptr.v()
-
+            ptr_offset = ptr if isinstance(ptr, Number) else ptr.v()
             for arena in self.arenas:
                 for heap in arena.heaps:
                     if heap.v() <= ptr_offset < (heap.v() + heap.size):
@@ -1238,16 +1198,19 @@ class HeapAnalysis(common.LinProcessFilter):
 
         curr_arena = arena
         for _ in range(arena_max):
-            swap_check_result = self._check_and_report_arena_for_being_swapped(
-                curr_arena) if not deactivate_swap_check else None
+            swap_check_result = (
+                None
+                if deactivate_swap_check
+                else self._check_and_report_arena_for_being_swapped(curr_arena)
+            )
 
-            if swap_check_result is not True:
-                curr_arena = curr_arena.next
-                if arena == curr_arena:
-                    return True
 
-            else:
+            if swap_check_result is True:
                 break
+
+            curr_arena = curr_arena.next
+            if arena == curr_arena:
+                return True
 
         return False
 

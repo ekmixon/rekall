@@ -31,12 +31,9 @@ class DarwinLsmod(common.AbstractDarwinCommand):
     mod_lookup = None
 
     def get_module_list(self):
-        # The kernel is also included in the module list to make it easier to
-        # local pointers inside it.
-        # See: xnu-2422.1.72/bsd/dev/dtrace/dtrace.c: 19843
-        kernel = self.profile.get_constant_object(
-            "_g_kernel_kmod_info", "kmod_info")
-        if kernel:
+        if kernel := self.profile.get_constant_object(
+            "_g_kernel_kmod_info", "kmod_info"
+        ):
             yield kernel
 
         module = self.profile.get_constant_object(
@@ -48,8 +45,7 @@ class DarwinLsmod(common.AbstractDarwinCommand):
             vm=self.kernel_address_space)
 
         # walk the modules list
-        for m in module.walk_list("next", True):
-            yield m
+        yield from module.walk_list("next", True)
 
     def render(self, renderer):
         renderer.table_header([("Address", "address", "[addrpad]"),

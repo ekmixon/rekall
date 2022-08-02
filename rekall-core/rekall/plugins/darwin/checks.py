@@ -63,14 +63,13 @@ class DarwinFindSysent(common.AbstractDarwinParameterHook):
             return hit
 
     def calculate(self):
-        nsysent_off = self.session.profile.get_constant(
-            "_nsysent", is_address=True)
-
-        if not nsysent_off:
+        if nsysent_off := self.session.profile.get_constant(
+            "_nsysent", is_address=True
+        ):
+            return self.scan(start=nsysent_off + self.SYSENT_REL_OFFSET,
+                             limit=self.LIMIT)
+        else:
             return
-
-        return self.scan(start=nsysent_off + self.SYSENT_REL_OFFSET,
-                         limit=self.LIMIT)
 
 
 class DarwinCheckSysCalls(common.AbstractDarwinCommand):
@@ -133,14 +132,13 @@ class OIDInfo(object):
         if self.oidp.oid_kind_type == "CTLTYPE_NODE":
             if self.oidp.oid_handler:
                 return "Node"
-            else:
-                names = self._names[:]
-                names.append(self.oidp.oid_name.deref())
-                numbers = self._numbers[:]
-                numbers.append(self.oidp.oid_number)
+            names = self._names[:]
+            names.append(self.oidp.oid_name.deref())
+            numbers = self._numbers[:]
+            numbers.append(self.oidp.oid_number)
 
-                oid = self.oidp.oid_arg1.dereference_as("sysctl_oid_list")
-                return OIDInfo(oid.slh_first, names, numbers)
+            oid = self.oidp.oid_arg1.dereference_as("sysctl_oid_list")
+            return OIDInfo(oid.slh_first, names, numbers)
 
         elif self.oidp.oid_kind_type == "CTLTYPE_INT":
             return self.oidp.oid_arg1.dereference_as("int")
@@ -160,13 +158,13 @@ class OIDInfo(object):
     def name(self):
         names = self._names[:]
         names.append(self.oidp.oid_name.deref())
-        return ".".join(["%s" % x for x in names])
+        return ".".join([f"{x}" for x in names])
 
     @utils.safe_property
     def number(self):
         numbers = self._numbers[:]
         numbers.append(self.oidp.oid_number)
-        return ".".join(["%s" % x for x in numbers])
+        return ".".join([f"{x}" for x in numbers])
 
 
 class DarwinSysctl(common.AbstractDarwinCommand):
@@ -202,15 +200,13 @@ class DarwinSysctl(common.AbstractDarwinCommand):
             "_sysctl__children", "sysctl_oid_list")
 
         oidinfo = OIDInfo(sysctrl_list.slh_first)
-        for oid in self._process(oidinfo):
-            yield oid
+        yield from self._process(oidinfo)
 
     def _process(self, oidinfo):
         # Output in sorted order since its eaiser to read.
         for oid in sorted(oidinfo, key=lambda x: x.name):
             if isinstance(oid.arg, OIDInfo):
-                for x in self._process(oid.arg):
-                    yield x
+                yield from self._process(oid.arg)
             else:
                 yield oid
 
@@ -239,7 +235,7 @@ class DarwinSysctl(common.AbstractDarwinCommand):
             if isinstance(value, obj.Pointer):
                 value = "@ 0x%X" % int(value)
 
-            elif not value == None:
+            elif value is not None:
                 try:
                     value = int(value)
                     value = "0x%X (%d)" % (value, value)
@@ -279,11 +275,7 @@ class CheckTrapTable(common.AbstractDarwinCommand):
         #    } mach_trap_t;
 
         # We only really care about the mach_trap_function here.
-        if self.profile.metadata("arch") == "I386":
-            offset = 4
-        else:
-            offset = 8
-
+        offset = 4 if self.profile.metadata("arch") == "I386" else 8
         self.profile.add_types({
             "mach_trap": [16, {
                 "mach_trap_function": [offset, ["Pointer", dict(
@@ -317,7 +309,7 @@ class CheckTrapTable(common.AbstractDarwinCommand):
             ("Symbol", "symbol", "")])
 
         for i, entry, call, sym_name in self.CheckTrapTables():
-            if call == None:
+            if call is None:
                 continue
 
             renderer.table_row(i, entry, call, sym_name or "Unknown",

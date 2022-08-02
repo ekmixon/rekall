@@ -116,16 +116,12 @@ class MIPS32PagedMemory(intel.IA32PagedMemory):
         # Need to find out if we're mapping for kernel space
         # or userspace
         sym = self._pa(self.session.profile.get_constant('swapper_pg_dir'))
-        if self.dtb == sym:
-            num_pde = 1024
-        else:
-            num_pde = 512
-
+        num_pde = 1024 if self.dtb == sym else 512
         # Pages that hold PDEs and PTEs are 0x1000 bytes each.
         # Each PDE and PTE is four bytes. Thus there are 0x1000 / 4 = 0x400
         # PDEs and PTEs we must test
         # On MIPS, the userspace PDEs are limited to 512 entries
-        for pde in range(0, num_pde):
+        for pde in range(num_pde):
             vaddr = pde << 22
             next_vaddr = (pde+1) << 22
             if start > next_vaddr:

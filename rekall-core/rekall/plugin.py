@@ -83,17 +83,11 @@ class CommandOption(object):
 
     @utils.safe_property
     def default(self):
-        if callable(self._default):
-            return self._default()
-
-        return self._default
+        return self._default() if callable(self._default) else self._default
 
     @utils.safe_property
     def choices(self):
-        if callable(self._choices):
-            return list(self._choices())
-
-        return self._choices
+        return list(self._choices()) if callable(self._choices) else self._choices
 
     def add_argument(self, parser):
         """Add ourselves to the parser."""
@@ -128,23 +122,18 @@ class CommandOption(object):
         # now, so this is good enough.
 
         # Handle addresses specifically though the address resolver.
-        if self.type == "Address" or self.type == "SymbolAddress":
+        if self.type in ["Address", "SymbolAddress"]:
             value = session.address_resolver.get_address_by_name(value)
 
         elif self.type == "dict":
             if not isinstance(value, dict):
-                raise TypeError("Parameter %s expects a dict" % self.name)
+                raise TypeError(f"Parameter {self.name} expects a dict")
 
         elif self.type == "IntParser":
-            if isinstance(value, basestring):
-                value = int(value, 0)
-            else:
-                value = int(value)
-
+            value = int(value, 0) if isinstance(value, basestring) else int(value)
         elif self.type == "Choices":
             if value not in self.choices:
-                raise TypeError("Arg %s must be one of %s" % (
-                    self.name, self.choices))
+                raise TypeError(f"Arg {self.name} must be one of {self.choices}")
 
         elif self.type == "ChoiceArray":
             if isinstance(value, basestring):
@@ -152,27 +141,25 @@ class CommandOption(object):
 
             for item in value:
                 if item not in self.choices:
-                    raise TypeError("Arg %s must be one of %s" % (
-                        self.name, self.choices))
+                    raise TypeError(f"Arg {self.name} must be one of {self.choices}")
 
         elif self.type in ["ArrayString", "ArrayStringParser"]:
             if isinstance(value, basestring):
                 value = [value]
 
             if not isinstance(value, collections.Iterable):
-                raise TypeError("Arg %s must be a list of strings" % self.name)
+                raise TypeError(f"Arg {self.name} must be a list of strings")
 
             for item in value:
                 if not isinstance(item, basestring):
-                    raise TypeError("Arg %s must be a list of strings" %
-                                    self.name)
+                    raise TypeError(f"Arg {self.name} must be a list of strings")
 
         elif self.type == "Array":
             if isinstance(value, basestring):
                 value = [value]
 
             if not isinstance(value, collections.Iterable):
-                raise TypeError("Arg %s must be a list of strings" % self.name)
+                raise TypeError(f"Arg {self.name} must be a list of strings")
 
         elif self.type == "RegEx":
             if isinstance(value, basestring):
@@ -188,10 +175,9 @@ class CommandOption(object):
                     try:
                         result.append(int(x))
                     except TypeError:
-                        raise TypeError("Arg %s must be a list of integers" % self.name)
+                        raise TypeError(f"Arg {self.name} must be a list of integers")
                 value = result
 
-        # Allow address space to be specified.
         elif self.type == "AddressSpace":
             load_as = session.plugins.load_as(session=session)
             value = load_as.ResolveAddressSpace(value)
@@ -305,8 +291,8 @@ class Command(with_metaclass(registry.MetaclassRegistry, ModeBasedActiveMixin)):
                                       "if they require arguments.")
 
     @registry.classproperty
-    def name(cls):  # pylint: disable=no-self-argument
-        return getattr(cls, "_%s__name" % cls.__name__, None)
+    def name(self):  # pylint: disable=no-self-argument
+        return getattr(self, f"_{self.__name__}__name", None)
 
     def __init__(self, ignore_required=False, **kwargs):
         """The constructor for this command.
@@ -325,11 +311,11 @@ class Command(with_metaclass(registry.MetaclassRegistry, ModeBasedActiveMixin)):
         """
         session = kwargs.pop("session", None)
         if kwargs:
-            raise InvalidArgs("Invalid arguments: %s" % str(list(kwargs.keys())))
+            raise InvalidArgs(f"Invalid arguments: {list(kwargs.keys())}")
 
         super(Command, self).__init__(**kwargs)
 
-        if session == None:
+        if session is None:
             raise InvalidArgs("A session must be provided.")
 
         self.session = session
@@ -362,7 +348,7 @@ class Command(with_metaclass(registry.MetaclassRegistry, ModeBasedActiveMixin)):
         return fd.getvalue()
 
     def __repr__(self):
-        return "Plugin: %s (%s)" % (self.name, self.__class__.__name__)
+        return f"Plugin: {self.name} ({self.__class__.__name__})"
 
     def __iter__(self):
         """Make plugins that define collect iterable, as convenience.
@@ -375,13 +361,11 @@ class Command(with_metaclass(registry.MetaclassRegistry, ModeBasedActiveMixin)):
             for x in session.plugins.get_some_data().collect():
                 # do stuff
         """
-        if callable(getattr(self, "collect", None)):
-            for x in self.collect():
-                if x:
-                    yield x
-
-        else:
+        if not callable(getattr(self, "collect", None)):
             raise TypeError("%r is not iterable." % self)
+        for x in self.collect():
+            if x:
+                yield x
 
     def render(self, renderer):
         """Produce results on the renderer given.
@@ -426,18 +410,16 @@ class ProfileCommand(Command):
 
     @classmethod
     def is_active(cls, session):
-        if cls.PROFILE_REQUIRED:
-            # Note! This will trigger profile autodetection if this plugin is
-            # needed. This might be slightly unexpected: When command line
-            # completing the available plugins we will trigger profile
-            # autodetection in order to determine which plugins are active.
-            profile = (session.profile != None and
-                       super(ProfileCommand, cls).is_active(session))
-
-            return profile
-
-        else:
+        if not cls.PROFILE_REQUIRED:
             return super(ProfileCommand, cls).is_active(session)
+        # Note! This will trigger profile autodetection if this plugin is
+        # needed. This might be slightly unexpected: When command line
+        # completing the available plugins we will trigger profile
+        # autodetection in order to determine which plugins are active.
+        profile = (session.profile != None and
+                   super(ProfileCommand, cls).is_active(session))
+
+        return profile
 
     def __init__(self, profile=None, **kwargs):
         """Baseclass for all plugins which accept a profile.
@@ -486,14 +468,14 @@ class PluginHeader(object):
                                 "using dicts, NOT tuples). Table header %r "
                                 "is invalid." % columns)
 
-            name = column.get("name")
-            if not name:
+            if name := column.get("name"):
+                self.by_name[name] = column
+
+            else:
                 raise ValueError(
                     "Plugins declaring table headers ahead of "
                     "time MUST specify 'name' for each column. "
                     "Table header %r is invalid." % (columns,))
-
-            self.by_name[name] = column
 
         self.header = copy.deepcopy(columns)
 
@@ -508,8 +490,7 @@ class PluginHeader(object):
         declared headers. It's also used by 'collect' to find producers.
         """
         for column in self.header:
-            t = column.get("type")
-            if t:
+            if t := column.get("type"):
                 yield t
 
     def __iter__(self):
@@ -576,7 +557,7 @@ class ArgsParserMixin(object):
         definitions = []
         definitions_classes = {}
         for cls in self.__class__.__mro__:
-            args_definition = getattr(cls, "_%s__args" % cls.__name__, [])
+            args_definition = getattr(cls, f"_{cls.__name__}__args", [])
             for definition in args_definition:
                 # Definitions can be just simple dicts.
                 if isinstance(definition, dict):
@@ -605,8 +586,9 @@ class ArgsParserMixin(object):
             # bug.
             if definition.name in kwargs:
                 raise TypeError(
-                    "Positional Args %s is also supplied as a keyword arg." %
-                    definition.name)
+                    f"Positional Args {definition.name} is also supplied as a keyword arg."
+                )
+
 
             kwargs[definition.name] = pos_arg
 
@@ -615,7 +597,7 @@ class ArgsParserMixin(object):
             value = kwargs.pop(definition.name, None)
             if (value is None and definition.required and
                     not self.ignore_required):
-                raise InvalidArgs("%s is required." % definition.name)
+                raise InvalidArgs(f"{definition.name} is required.")
 
             # A sentinel means that the option is unset. We pass the
             # sentinel directly to the plugin so it can determine for
@@ -632,7 +614,7 @@ class ArgsParserMixin(object):
                 self.plugin_args[definition.name] = definition.parse(
                     value, session=kwargs.get("session"))
             except (ValueError, TypeError) as e:
-                raise InvalidArgs("%s invalid: %s." % (definition.name, e))
+                raise InvalidArgs(f"{definition.name} invalid: {e}.")
 
         super(ArgsParserMixin, self).__init__(**kwargs)
 
@@ -669,7 +651,7 @@ class TypedProfileCommand(ArgsParserMixin):
 
         # Collect all the declared args and add them to the parser.
         for cls_i in cls.__mro__:
-            args_definition = getattr(cls_i, "_%s__args" % cls_i.__name__, [])
+            args_definition = getattr(cls_i, f"_{cls_i.__name__}__args", [])
             for definition in args_definition:
                 if isinstance(definition, dict):
                     definition = CommandOption(**definition)
@@ -711,7 +693,7 @@ class TypedProfileCommand(ArgsParserMixin):
         try:
             for row_count, row in enumerate(self.collect()):
                 if isinstance(row, dict):
-                    result.update(row)
+                    result |= row
 
                 elif isinstance(row, (tuple, list)):
                     for item, column_name in zip(row, columns):
@@ -762,16 +744,12 @@ class TypedProfileCommand(ArgsParserMixin):
             if isinstance(row, (list, tuple)):
                 renderer.table_row(*row, **options)
             else:
-                new_row = []
-                for column in self.table_header:
-                    new_row.append(
-                        row.pop(column["name"], None)
-                    )
-
+                new_row = [row.pop(column["name"], None) for column in self.table_header]
                 if set(row) - self.ROW_OPTIONS:
                     raise RuntimeError(
-                        "Plugin produced more data than defined columns (%s)." %
-                        (list(row),))
+                        f"Plugin produced more data than defined columns ({list(row)})."
+                    )
+
 
                 renderer.table_row(*new_row, **row)
 
@@ -887,13 +865,13 @@ class KernelASMixin(object):
             # Try to load the AS from the session if possible.
             self.kernel_address_space = self.session.kernel_address_space
 
-        if self.kernel_address_space == None:
+        if self.kernel_address_space is None:
             # Try to guess the AS
             self.session.plugins.load_as().GetVirtualAddressSpace()
 
             self.kernel_address_space = self.session.kernel_address_space
 
-        if self.kernel_address_space == None:
+        if self.kernel_address_space is None:
             raise PluginError("kernel_address_space not specified.")
 
 
@@ -960,7 +938,7 @@ class PluginMetadataDatabase(object):
     """A database of all the currently registered plugin's metadata."""
 
     def __init__(self, session):
-        if session == None:
+        if session is None:
             raise RuntimeError("Session must be set")
 
         self.session = session
@@ -976,8 +954,7 @@ class PluginMetadataDatabase(object):
 
     def MetadataByName(self, name):
         """Return all Implementations that implement command name."""
-        for command_metadata in self.db[name]:
-            yield command_metadata
+        yield from self.db[name]
 
     def GetActivePlugin(self, plugin_name):
         results = []
@@ -990,19 +967,17 @@ class PluginMetadataDatabase(object):
         # is an error to have multiple implementations active at the same
         # time.
         if len(results) > 1:
-            raise RuntimeError("Multiple plugin implementations for %s: %s" % (
-                plugin_name, [x.plugin_cls for x in results]))
+            raise RuntimeError(
+                f"Multiple plugin implementations for {plugin_name}: {[x.plugin_cls for x in results]}"
+            )
 
-        if results:
-            return results[0]
 
-        return obj.NoneObject("Plugin not active")
+        return results[0] if results else obj.NoneObject("Plugin not active")
 
     def Serialize(self):
         result = {}
         for name in self.db:
-            command_metadata = self.GetActivePlugin(name)
-            if command_metadata:
+            if command_metadata := self.GetActivePlugin(name):
                 result[name] = command_metadata.Metadata()
 
         return result

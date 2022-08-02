@@ -59,7 +59,7 @@ def get_resource(filename, package="rekall-core", prefix="resources"):
     if target and os.access(target, os.R_OK):
         return target
 
-    raise IOError("Unable to find resource %s" % filename)
+    raise IOError(f"Unable to find resource {filename}")
 
 
 def _get_pkg_resource(filename, package, prefix):

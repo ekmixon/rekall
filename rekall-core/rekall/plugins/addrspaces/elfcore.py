@@ -46,12 +46,13 @@ def ParseIOMap(string):
     result = {}
     line_re = re.compile("([0-9a-f]+)-([0-9a-f]+)\s*:\s*(.+)")
     for line in string.splitlines():
-        m =  line_re.search(line)
-        if m:
-            result.setdefault(m.group(3), []).append(
+        if m := line_re.search(line):
+            result.setdefault(m[3], []).append(
                 addrspace.Run(
-                    start=int("0x"+m.group(1), 16),
-                    end=int("0x"+m.group(2), 16)))
+                    start=int("0x" + m[1], 16), end=int("0x" + m[2], 16)
+                )
+            )
+
         else:
             raise IOError("Unable to parse iomap")
 
@@ -83,7 +84,7 @@ class Elf64CoreDump(addrspace.RunBasedAddressSpace):
 
         self.as_assert(self.elf64_hdr.e_type == "ET_CORE",
                        "Elf file is not a core file.")
-        self.name = "%s|%s" % (self.__class__.__name__, self.base.name)
+        self.name = f"{self.__class__.__name__}|{self.base.name}"
 
         # Iterate over all the program headers and map the runs.
         for segment in self.elf64_hdr.segments:
@@ -125,8 +126,7 @@ class Elf64CoreDump(addrspace.RunBasedAddressSpace):
 
             metadata = yaml.safe_load(yaml_file)
         except (yaml.YAMLError, TypeError) as e:
-            self.session.logging.error(
-                "Invalid file metadata, skipping: %s" % e)
+            self.session.logging.error(f"Invalid file metadata, skipping: {e}")
             return
 
         for session_param, metadata_key in (("dtb", "CR3"),
@@ -213,7 +213,14 @@ class KCoreAddressSpace(Elf64CoreDump):
         range_len = range_end - range_start
 
         io_map_vm = self.get_file_address_space("/proc/iomem")
-        if io_map_vm != None:
+        if io_map_vm is None:
+            runs.extend(
+                (start - range_start, run.file_offset, run.length)
+                for start, _, run in self.runs
+                if range_start < run.start < range_end
+            )
+
+        else:
             io_map_data = utils.SmartUnicode(io_map_vm.read(0, 100000).split(b"\x00")[0])
             io_map = ParseIOMap(io_map_data)
 
@@ -237,12 +244,6 @@ class KCoreAddressSpace(Elf64CoreDump):
                         runs.append((normalized_start,
                                      run.file_offset, run.length))
                         break
-        else:
-            for start, _, run in self.runs:
-                if range_start < run.start < range_end:
-                    runs.append((start - range_start,
-                                 run.file_offset, run.length))
-
         self.as_assert(runs, "No kcore compatible virtual ranges.")
         self.runs.clear()
 
@@ -299,7 +300,7 @@ class XenElf64CoreDump(addrspace.PagedReader):
         xen_note = self.elf64_hdr.section_by_name(".note.Xen")
         self.as_assert(xen_note, "Image does not contain Xen note.")
 
-        self.name = "%s|%s" % (self.__class__.__name__, self.base.name)
+        self.name = f"{self.__class__.__name__}|{self.base.name}"
         self.runs = self.build_runs()
 
     def build_runs(self):
@@ -349,11 +350,12 @@ class XenElf64CoreDump(addrspace.PagedReader):
     def get_mappings(self, start=0, end=2**64):
         for run_pfn in sorted(self.runs):
             start = run_pfn * self.PAGE_SIZE
-            run = addrspace.Run(start=start,
-                                end=start + self.PAGE_SIZE,
-                                file_offset=self.vtop(start),
-                                address_space=self.base)
-            yield run
+            yield addrspace.Run(
+                start=start,
+                end=start + self.PAGE_SIZE,
+                file_offset=self.vtop(start),
+                address_space=self.base,
+            )
 
     def end(self):
         return self.max_pfn

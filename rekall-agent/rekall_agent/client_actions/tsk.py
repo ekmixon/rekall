@@ -136,7 +136,7 @@ class TSKListDirectoryAction(files.ListDirectoryAction):
                             if value < 0:
                                 value &= 0xFFFFFFFF
 
-                            result["st_%s" % attribute] = value
+                            result[f"st_{attribute}"] = value
                         except AttributeError:
                             pass
 
@@ -150,12 +150,13 @@ class TSKListDirectoryAction(files.ListDirectoryAction):
                         try:
                             sub_directory = fileent.as_directory()
                             # Yes this is actually a directory - recurse it.
-                            for x in self._process_dirent(
-                                    sub_directory,
-                                    os.path.join(dirname, name),
-                                    stack=stack,
-                                    depth=depth+1):
-                                yield x
+                            yield from self._process_dirent(
+                                sub_directory,
+                                os.path.join(dirname, name),
+                                stack=stack,
+                                depth=depth + 1,
+                            )
+
                         except IOError:
                             pass
 
@@ -164,7 +165,6 @@ class TSKListDirectoryAction(files.ListDirectoryAction):
 
     def collect(self):
         dirent = self._open_directory()
-        for x in helpers.ListFilter().filter(
-                self.filter,
-                self._process_dirent(dirent, dirname=self.path)):
-            yield x
+        yield from helpers.ListFilter().filter(
+            self.filter, self._process_dirent(dirent, dirname=self.path)
+        )

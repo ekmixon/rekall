@@ -65,7 +65,7 @@ if __name__ == "__main__":
     )
 
     args = argument_parser.parse_args()
-    print ("***Modifying file %s **" % args.binary)
+    print(f"***Modifying file {args.binary} **")
 
     vm = standard.WritableAddressSpace(
         filename=args.binary, session=session.Session(), mode="r+b")

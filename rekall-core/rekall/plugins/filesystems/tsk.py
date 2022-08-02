@@ -27,10 +27,7 @@ class FSEntry(object):
         return self.tsk_file.info.meta.size
 
     def read(self, start, size):
-        if self.size > 0:
-            return self.tsk_file.read_random(start, size)
-        else:
-            return ""
+        return self.tsk_file.read_random(start, size) if self.size > 0 else ""
 
     def __iter__(self):
         if self.type == "DIR":
@@ -93,8 +90,10 @@ class Partition(object):
         self.disk = disk
         self.session = session
         self.filesystem = filesystem or obj.NoneObject("No filesystem")
-        if (filesystem == None and
-            self.tsk_part.flags == pytsk3.TSK_VS_PART_FLAG_ALLOC):
+        if (
+            filesystem is None
+            and self.tsk_part.flags == pytsk3.TSK_VS_PART_FLAG_ALLOC
+        ):
             try:
                 address_space = self.get_partition_address_space()
                 filesystem = pytsk3.FS_Info(AS_Img_Info(address_space))

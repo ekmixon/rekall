@@ -107,11 +107,16 @@ class Run(object):
         self.end = self.start + value
 
     def copy(self, **kw):
-        kwargs = dict(start=self.start, end=self.end,
-                      address_space=self.address_space,
-                      file_offset=self.file_offset,
-                      data=self.data)
-        kwargs.update(kw)
+        kwargs = (
+            dict(
+                start=self.start,
+                end=self.end,
+                address_space=self.address_space,
+                file_offset=self.file_offset,
+                data=self.data,
+            )
+            | kw
+        )
 
         return self.__class__(**kwargs)
 
@@ -216,8 +221,7 @@ class BaseAddressSpace(with_metaclass(registry.MetaclassRegistry, object)):
         return []
 
     def end(self):
-        runs = list(self.get_mappings())
-        if runs:
+        if runs := list(self.get_mappings()):
             last_run = runs[-1]
             return last_run.end
         return 0
@@ -313,9 +317,6 @@ class BaseAddressSpace(with_metaclass(registry.MetaclassRegistry, object)):
                     run.file_offset == contiguous_poffset + last_run_length and
                     run.address_space is last_as):
                 contiguous_voffset_end = min(run.end, end)
-                last_run_length = contiguous_voffset_end - contiguous_voffset
-                last_as = run.address_space
-
             else:
                 if last_run_length > 0:
                     yield Run(start=contiguous_voffset,
@@ -327,8 +328,8 @@ class BaseAddressSpace(with_metaclass(registry.MetaclassRegistry, object)):
                 contiguous_voffset = run.start
                 contiguous_voffset_end = min(run.end, end)
                 contiguous_poffset = run.file_offset or 0
-                last_run_length = contiguous_voffset_end - contiguous_voffset
-                last_as = run.address_space
+            last_run_length = contiguous_voffset_end - contiguous_voffset
+            last_as = run.address_space
 
         if last_run_length > 0:
             yield Run(start=contiguous_voffset,
@@ -380,7 +381,7 @@ class BaseAddressSpace(with_metaclass(registry.MetaclassRegistry, object)):
     @classmethod
     def metadata(cls, name, default=None):
         """Obtain metadata about this address space."""
-        return getattr(cls, "_%s__%s" % (cls.__name__, name), default)
+        return getattr(cls, f"_{cls.__name__}__{name}", default)
 
     def __str__(self):
         return self.__class__.__name__
@@ -501,7 +502,7 @@ class CachingAddressSpaceMixIn(object):
         return super(CachingAddressSpaceMixIn, self).read(addr, length)
 
     def read_partial(self, addr, length):
-        if addr == None:
+        if addr is None:
             return addr
 
         chunk_number = addr // self.CHUNK_SIZE
@@ -559,21 +560,18 @@ class PagedReader(BaseAddressSpace):
             return 0
 
         paddr = self.vtop(vaddr)
-        if not paddr:
-            return 0
-
-        return self.base.write(paddr, buf[:to_write])
+        return self.base.write(paddr, buf[:to_write]) if paddr else 0
 
     def write(self, addr, buf):
         available = len(buf)
         written = 0
 
         while available > written:
-            chunk_len = self._write_chunk(addr + written, buf[written:])
-            if not chunk_len:
-                break
-            written += chunk_len
+            if chunk_len := self._write_chunk(addr + written, buf[written:]):
+                written += chunk_len
 
+            else:
+                break
         return written
 
     def read(self, addr, length):
@@ -698,9 +696,8 @@ class RunBasedAddressSpace(PagedReader):
         to read from. Maybe we need to change this method's prototype?
         """
         start, end, run = self.runs.get_containing_range(addr)
-        if start is not None:
-            if addr < end:
-                return run.file_offset + addr - start
+        if start is not None and addr < end:
+            return run.file_offset + addr - start
 
     def is_valid_address(self, addr):
         return self.vtop(addr) is not None

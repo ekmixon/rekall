@@ -55,32 +55,23 @@ class CpuInfo(common.LinuxPlugin):
 
     def online_cpus(self):
         """returns a list of online cpus (the processor numbers)"""
-        #later kernels.
-        cpus = (self.profile.get_constant("cpu_online_bits", is_address=True) or
-                self.profile.get_constant("cpu_present_map", is_address=True))
-
-        if not cpus:
-            # __cpu_online_mask is a cpumask struct
-            # Its member "bits" contains an array of bit masks.
-            # See https://lore.kernel.org/patchwork/patch/940568/
-            # and include/linux/cpumask.h
-            cpus = self.profile.get_constant_object(
-                    "__cpu_online_mask",
-                    target="cpumask",
-                    vm=self.kernel_address_space)
-
-            if cpus:
-                #bmap_list = self.profile.cpumask(offset=cpus).bits
-                bmap_list = cpus.bits
-            else:
-                raise AttributeError("Unable to determine number of online "
-                                 "CPUs for memory capture")
-        else:
+        if cpus := (
+            self.profile.get_constant("cpu_online_bits", is_address=True)
+            or self.profile.get_constant("cpu_present_map", is_address=True)
+        ):
             bmap_list = [self.profile.Object(
                 "unsigned long", offset=cpus, vm=self.kernel_address_space)]
 
+        elif cpus := self.profile.get_constant_object(
+            "__cpu_online_mask", target="cpumask", vm=self.kernel_address_space
+        ):
+            #bmap_list = self.profile.cpumask(offset=cpus).bits
+            bmap_list = cpus.bits
+        else:
+            raise AttributeError("Unable to determine number of online "
+                             "CPUs for memory capture")
         for bmap in bmap_list:
-            for i in range(0, bmap.obj_size):
+            for i in range(bmap.obj_size):
                 if bmap & (1 << i):
                     yield i
 

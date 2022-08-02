@@ -44,11 +44,7 @@ class IOManagerTest(testlib.RekallBaseUnitTestCase):
             path = os.path.join(self.temp_directory, self.version,
                                 filename)
 
-            if path.endswith("gz"):
-                opener = gzip.open
-            else:
-                opener = open
-
+            opener = gzip.open if path.endswith("gz") else open
             try:
                 os.makedirs(os.path.dirname(path))
             except (OSError, IOError):

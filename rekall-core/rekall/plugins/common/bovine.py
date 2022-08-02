@@ -71,9 +71,10 @@ class RekallBovineExperience3000(plugin.Command):
              "The same row has another line that shouldn't get wrapped."))
 
         renderer.section("Heatmap test:")
-        cells = []
-        for digit in itertools.islice(algo.EulersDecimals(), 0xff):
-            cells.append(dict(heat=float(digit + 1) * .1, value=digit))
+        cells = [
+            dict(heat=float(digit + 1) * 0.1, value=digit)
+            for digit in itertools.islice(algo.EulersDecimals(), 0xFF)
+        ]
 
         randomized = visual_aides.Heatmap(
             caption="Offset (p)",

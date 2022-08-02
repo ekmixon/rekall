@@ -66,9 +66,7 @@ class Describe(plugin.TypedProfileCommand, plugin.ProfileCommand):
                 if isinstance(type_instance, obj.Pointer):
                     type_instance = type_instance.dereference()
 
-                for x in self.collect_members(type_instance, depth + 1):
-                    yield x
-
+                yield from self.collect_members(type_instance, depth + 1)
         except (TypeError, NotImplementedError):
             pass
 
@@ -129,8 +127,7 @@ class Describe(plugin.TypedProfileCommand, plugin.ProfileCommand):
                 Type=self._determine_type_name(column_type_instance),
             )
 
-            for x in self.collect_members(column_type_instance, 1):
-                yield x
+            yield from self.collect_members(column_type_instance, 1)
 
 
 class TestDescribe(testlib.SimpleTestCase):

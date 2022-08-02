@@ -39,11 +39,12 @@ class TestHTTPServer(testlib.RekallBaseUnitTestCase):
             session=cls._session,
             server=http_server.HTTPServerPolicy.from_keywords(
                 session=cls._session,
-                base_url="http://127.0.0.1:%s/" % port,
+                base_url=f"http://127.0.0.1:{port}/",
                 root_directory=cls.tempdir,
                 bind_port=port,
-            )
+            ),
         )
+
 
         cls._session.SetParameter("agent_config_obj", cls.config)
 
@@ -70,7 +71,7 @@ class TestHTTPServer(testlib.RekallBaseUnitTestCase):
 
         # Unique string to write to the bucket.
         self.string = str(time.time())
-        self.filename = "%s.txt" % time.time()
+        self.filename = f"{time.time()}.txt"
         self.http_location_cls = serializer.SerializedObject.get_implemetation(
             "HTTPLocation")
 
@@ -86,8 +87,11 @@ class TestHTTPServer(testlib.RekallBaseUnitTestCase):
         now = int(time.time())
 
         read_location_obj = self.http_location_cls.from_keywords(
-            path_prefix="/path/" + self.filename, access=["READ"],
-            session=self.session)
+            path_prefix=f"/path/{self.filename}",
+            access=["READ"],
+            session=self.session,
+        )
+
 
         # Can not write with a location opened for reading only.
         with self.assertRaises(IOError):
@@ -95,8 +99,11 @@ class TestHTTPServer(testlib.RekallBaseUnitTestCase):
 
         # Try again with a location for writing.
         write_location_obj = self.http_location_cls.from_keywords(
-            path_prefix="/path/" + self.filename, access=["WRITE"],
-            session=self.session)
+            path_prefix=f"/path/{self.filename}",
+            access=["WRITE"],
+            session=self.session,
+        )
+
 
         # Reading and writing.
         write_location_obj.write_file("Hello world")
@@ -109,7 +116,7 @@ class TestHTTPServer(testlib.RekallBaseUnitTestCase):
         stat = read_location_obj.stat()
 
         self.assertTrue(stat.size > 0)
-        self.assertEqual(stat.location.path_prefix, "/path/" + self.filename)
+        self.assertEqual(stat.location.path_prefix, f"/path/{self.filename}")
         self.assertEqual(stat.location.path_template, "")
         self.assertTrue(stat.created.timestamp >= now)
         self.assertTrue(stat.created.timestamp <= int(time.time()))
@@ -133,7 +140,7 @@ class TestHTTPServer(testlib.RekallBaseUnitTestCase):
         paths = [x.location.path_prefix for x in files]
 
         # We should see the new file in there.
-        self.assertTrue("/path/" + self.filename in paths)
+        self.assertTrue(f"/path/{self.filename}" in paths)
 
         # Deletion.
         write_location_obj.delete()
